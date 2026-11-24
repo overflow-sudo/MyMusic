@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createSong } from '../domain/library'
+import { createSong, emptyLibrary, serializeLibrary, updateSong } from '../domain/library'
 import type { Song } from '../domain/types'
 import { createMemoryDir } from '../storage/memoryDir'
 import { songDir } from '../storage/repo'
@@ -96,14 +96,35 @@ describe('SongDetail', () => {
     await waitFor(() => expect(patches.at(-1)).toEqual({ track: { fileName: 'track.mp3', startSec: 12, volume: 0.7 } }))
     expect(screen.queryByText('Geçersiz süre')).toBeNull()
 
-    fireEvent.change(screen.getByLabelText('Ses seviyesi'), { target: { value: '50' } })
+    const slider = screen.getByLabelText('Ses seviyesi')
+    const before = patches.length
+    fireEvent.change(slider, { target: { value: '30' } })
+    fireEvent.change(slider, { target: { value: '50' } })
+    expect(patches).toHaveLength(before)
+    fireEvent.keyUp(slider)
     await waitFor(() => expect(patches.at(-1)).toEqual({ track: { fileName: 'track.mp3', startSec: 12, volume: 0.5 } }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Kaldır' }))
     await waitFor(() => expect(patches.at(-1)).toEqual({ track: undefined }))
     const dir = await songDir(root, base)
     expect((await dir.list()).map((e) => e.name)).not.toContain('track.mp3')
+    const lib = { ...emptyLibrary(), songs: [{ ...base, track: { fileName: 'track.mp3', startSec: 12, volume: 0.5 } }] }
+    expect(serializeLibrary(updateSong(lib, 's1', patches.at(-1)!, new Date()))).not.toContain('"track"')
     expect(await screen.findByLabelText('Parça ekle')).toBeInTheDocument()
+  })
+
+  it('start point error does not leak into a re-imported track', async () => {
+    setup()
+    const file = new File(['abc'], 'a.mp3')
+    fireEvent.change(screen.getByLabelText('Parça ekle'), { target: { files: [file] } })
+    const start = await screen.findByLabelText('Başlangıç noktası')
+    fireEvent.change(start, { target: { value: 'abc' } })
+    fireEvent.blur(start)
+    expect(await screen.findByText('Geçersiz süre')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Kaldır' }))
+    fireEvent.change(await screen.findByLabelText('Parça ekle'), { target: { files: [file] } })
+    expect(await screen.findByLabelText('Başlangıç noktası')).toHaveValue('0:00')
+    expect(screen.queryByText('Geçersiz süre')).toBeNull()
   })
 
   it('lists recordings newest first with Turkish dates and kinds', async () => {

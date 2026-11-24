@@ -63,8 +63,9 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
   const doRemove = async () => {
     setSaveError(false)
     try {
-      await removeTrack(root, song)
+      // Patch first: if it fails the song still points at an existing file; an orphan file is harmless.
       await patchSong(song.id, { track: undefined })
+      await removeTrack(root, song)
     } catch {
       setSaveError(true)
     }

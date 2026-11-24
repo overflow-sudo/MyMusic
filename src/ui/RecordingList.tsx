@@ -74,7 +74,7 @@ function Row({ root, song, entry }: { root: FsDir; song: Song; entry: RecordingE
     return () => {
       cancelled = true
     }
-  }, [root, song, entry])
+  }, [root, song.folderName, entry.fileName]) // eslint-disable-line react-hooks/exhaustive-deps -- song object changes on every patch
 
   useEffect(
     () => () => {
