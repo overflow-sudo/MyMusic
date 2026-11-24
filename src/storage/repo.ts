@@ -56,7 +56,7 @@ export async function importTrack(root: FsDir, song: Song, file: File): Promise<
   const fileName = `track.${ext}`
   await dir.writeFile(fileName, file)
   for (const e of await dir.list())
-    if (e.kind === 'file' && isTrackFile(e.name) && e.name !== fileName) await dir.remove(e.name)
+    if (e.kind === 'file' && isTrackFile(e.name) && e.name.toLowerCase() !== fileName) await dir.remove(e.name)
   return { fileName, startSec: 0, volume: 0.7 }
 }
 

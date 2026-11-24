@@ -5,6 +5,7 @@ import {
 } from './repo'
 import { createSong, emptyLibrary } from '../domain/library'
 import type { Song } from '../domain/types'
+import type { FsDir } from './fsDir'
 
 const mkSong = (): Song =>
   createSong({ title: 'Wonderwall', artist: 'Oasis', status: 'learning', bpm: 87, countInBeats: 4 }, new Date(2026, 10, 24))
@@ -74,6 +75,35 @@ describe('recordings and tracks', () => {
     const root = createMemoryDir()
     const t = await importTrack(root, mkSong(), new File(['a'], 'noext'))
     expect(t.fileName).toBe('track.mp3')
+  })
+  it('does not delete the new track on a case-insensitive filesystem', async () => {
+    const root = createMemoryDir()
+    const song = mkSong()
+    const mem = await songDir(root, song)
+    await mem.writeFile('track.MP3', 'old')
+    // NTFS-like view: writing track.mp3 lands on the existing track.MP3 entry
+    const ntfs: FsDir = {
+      ...mem,
+      writeFile: async (name, data) => {
+        const existing = (await mem.list()).find((e) => e.name.toLowerCase() === name.toLowerCase())
+        await mem.writeFile(existing?.name ?? name, data)
+      },
+    }
+    const wrapped: FsDir = { ...root, dir: async (n, o) => (n === 'recordings' ? { ...(await root.dir(n, o))!, dir: async () => ntfs } : root.dir(n, o)) }
+    const t = await importTrack(wrapped, song, new File(['new'], 'x.mp3'))
+    expect(t.fileName).toBe('track.mp3')
+    const tracks = (await mem.list()).filter((e) => e.name.toLowerCase().startsWith('track.'))
+    expect(tracks).toHaveLength(1)
+    expect(await (await mem.readFile(tracks[0].name))!.text()).toBe('new')
+  })
+  it('readTrack uses song.track.fileName, and returns null if that file was deleted', async () => {
+    const root = createMemoryDir()
+    const song = mkSong()
+    const tr = await importTrack(root, song, new File(['abc'], 'a.wav'))
+    const withTrack = { ...song, track: tr }
+    expect(await (await readTrack(root, withTrack))!.text()).toBe('abc')
+    await (await songDir(root, song)).remove('track.wav')
+    expect(await readTrack(root, withTrack)).toBeNull()
   })
   it('reads and removes the track', async () => {
     const root = createMemoryDir()
