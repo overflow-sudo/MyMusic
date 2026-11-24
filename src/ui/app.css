@@ -6,3 +6,10 @@ body { margin: 0; }
 button { font: inherit; padding: 0.5rem 1rem; cursor: pointer; }
 button.link { background: none; border: none; text-decoration: underline; padding: 0; }
 .toast { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); background: #222; color: #fff; padding: 0.6rem 1rem; border-radius: 6px; }
+.row { display: flex; gap: 0.5rem; align-items: center; }
+[role="tab"][aria-selected="true"] { font-weight: 700; text-decoration: underline; }
+.song-list { align-items: stretch; }
+.rows { display: flex; flex-direction: column; gap: 0.25rem; }
+.song-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 0.75rem; text-align: left; align-items: center; }
+.song-form { display: flex; flex-direction: column; gap: 0.5rem; align-self: stretch; }
+.song-form label { display: flex; flex-direction: column; gap: 0.25rem; }

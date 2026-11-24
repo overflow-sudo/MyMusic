@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { listRecordings } from './storage/repo'
 import { useLibrary } from './state/useLibrary'
 import { ensurePermission, getSavedHandle, pickFolder, saveHandle } from './storage/folderHandle'
 import { fromHandle } from './storage/fsDir'
 import { recoverPending } from './storage/chunkWriter'
 import BrokenLibrary from './ui/BrokenLibrary'
 import FolderGate from './ui/FolderGate'
+import SongList from './ui/SongList'
 import Unsupported from './ui/Unsupported'
 import './ui/app.css'
 
@@ -19,12 +21,48 @@ type Phase =
 function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
   const root = useMemo(() => fromHandle(handle), [handle])
   const lib = useLibrary(root)
+  const [selectedSongId, setSelectedSongId] = useState<string | null>(null)
+  const [recordingCounts, setRecordingCounts] = useState<Record<string, number>>({})
+  const songs = lib.library.songs
+  useEffect(() => {
+    if (lib.status !== 'ready') return
+    let cancelled = false
+    void (async () => {
+      const next: Record<string, number> = {}
+      for (const song of songs) {
+        try {
+          next[song.id] = (await listRecordings(root, song)).length
+        } catch {
+          next[song.id] = 0
+        }
+      }
+      if (!cancelled) setRecordingCounts(next)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [root, songs, lib.status])
   if (lib.status === 'loading') return <main className="screen"><p>Yükleniyor…</p></main>
   if (lib.status === 'broken') return <BrokenLibrary error={lib.error} onReset={() => void lib.resetBroken()} />
+  const selected = selectedSongId ? songs.find((s) => s.id === selectedSongId) : undefined
+  if (selected) {
+    // Task 6 replaces this stub with SongDetail.
+    return (
+      <main className="screen">
+        <button onClick={() => setSelectedSongId(null)}>‹ Geri</button>
+        <p>{selected.title} — yakında</p>
+      </main>
+    )
+  }
   return (
-    <main className="screen">
-      <p>Şarkı listesi burada olacak</p>
-    </main>
+    <SongList
+      library={lib.library}
+      onOpen={setSelectedSongId}
+      onAdd={async (input) => {
+        await lib.addSong(input)
+      }}
+      recordingCounts={recordingCounts}
+    />
   )
 }
 

@@ -72,7 +72,7 @@ describe('App shell', () => {
     expect(await screen.findByText('Klasör bulunamadı, lütfen tekrar seç.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Klasör seç' })).toBeInTheDocument()
   })
-  it('granted handle opens the library placeholder', async () => {
+  it('granted handle opens the song list', async () => {
     const dirs = new Map<string, unknown>()
     const handle = {
       getDirectoryHandle: vi.fn(async (n: string) => {
@@ -84,7 +84,7 @@ describe('App shell', () => {
     vi.mocked(fh.getSavedHandle).mockResolvedValue(handle)
     vi.mocked(fh.ensurePermission).mockResolvedValue(true)
     render(<App />)
-    await waitFor(() => expect(screen.getByText('Şarkı listesi burada olacak')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Henüz şarkı yok. + Şarkı ekle ile başla.')).toBeInTheDocument())
   })
   it('denied reconnect shows feedback', async () => {
     const handle = {} as FileSystemDirectoryHandle
@@ -114,6 +114,6 @@ describe('App shell', () => {
     vi.mocked(fh.ensurePermission).mockResolvedValue(true)
     render(<App />)
     expect(await screen.findByText('2 yarım kayıt kurtarıldı')).toBeInTheDocument()
-    expect(screen.getByText('Şarkı listesi burada olacak')).toBeInTheDocument()
+    expect(screen.getByText('Henüz şarkı yok. + Şarkı ekle ile başla.')).toBeInTheDocument()
   })
 })
