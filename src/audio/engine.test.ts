@@ -57,6 +57,26 @@ afterEach(() => {
 })
 
 describe('startTake', () => {
+  it('calls onBeatPlan once after the count-in is scheduled', async () => {
+    const onBeatPlan = vi.fn()
+    const { ctx } = setup({ onBeatPlan })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(onBeatPlan).toHaveBeenCalledTimes(1)
+    const arg = onBeatPlan.mock.calls[0][0]
+    expect(arg.ctx).toBe(ctx())
+    expect(arg.plan.bpm).toBe(120)
+    expect(arg.plan.downbeat).toBeCloseTo(12.1, 9)
+    expect(arg.plan.clickTimes).toHaveLength(4)
+    ;[10.1, 10.6, 11.1, 11.6].forEach((t, i) => expect(arg.plan.clickTimes[i]).toBeCloseTo(t, 9))
+  })
+
+  it('a throwing onBeatPlan does not break the take', async () => {
+    const { rec, states } = setup({ onBeatPlan: () => { throw new Error('boom') } })
+    await vi.advanceTimersByTimeAsync(2100)
+    expect(rec().state).toBe('recording')
+    expect(states).toEqual(['countingIn', 'recording'])
+  })
+
   it('schedules headphones track at the downbeat and the recorded copy delayed by latency', async () => {
     const { ctx } = setup({ track: { buffer, startSec: 12, volume: 0.5 } })
     await vi.advanceTimersByTimeAsync(0)

@@ -30,6 +30,18 @@ describe('lightMath', () => {
     expect(takePhase(11.35, plan)).toBeCloseTo(0.5)
     expect(takePhase(11.85, plan)).toBeCloseTo(0.5)
   })
+  it('takePhase is null with no clicks before the downbeat', () => {
+    expect(takePhase(5, { clickTimes: [], downbeat: 10, bpm: 120 })).toBeNull()
+    expect(takePhase(10.25, { clickTimes: [], downbeat: 10, bpm: 120 })).toBeCloseTo(0.5)
+  })
+  it('takePhase returns 0 for a non-positive interval', () => {
+    expect(takePhase(12, { clickTimes: [10], downbeat: 12, bpm: -1 })).toBe(0)
+    expect(takePhase(13, { clickTimes: [10], downbeat: 12, bpm: 0 })).toBe(0)
+  })
+  it('pulseFromPhase clamps phase to 0..1', () => {
+    expect(pulseFromPhase(-0.5)).toBe(1)
+    expect(pulseFromPhase(1.5)).toBe(0)
+  })
   it('freePhase', () => {
     expect(freePhase(250, 120)).toBeCloseTo(0.5)
     expect(freePhase(500, 120)).toBeCloseTo(0)

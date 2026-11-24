@@ -18,21 +18,23 @@ export function levelFromDb(db: number): number {
 }
 
 export function pulseFromPhase(phase: number): number {
-  return Math.pow(1 - phase, 3)
+  return Math.pow(1 - clamp01(phase), 3)
 }
 
 /** Phase within the current beat; null before the first click. */
 export function takePhase(now: number, p: TakeBeatPlan): number | null {
   const { clickTimes, downbeat, bpm } = p
-  if (clickTimes.length > 0 && now < clickTimes[0]) return null
+  if (now < (clickTimes.length > 0 ? clickTimes[0] : downbeat)) return null
   if (now < downbeat) {
     let i = 0
     while (i + 1 < clickTimes.length && clickTimes[i + 1] <= now) i++
     const start = clickTimes[i]
     const end = i + 1 < clickTimes.length ? clickTimes[i + 1] : downbeat
-    return (now - start) / (end - start)
+    const interval = end - start
+    return interval > 0 ? (now - start) / interval : 0
   }
   const beat = 60 / bpm
+  if (!(beat > 0) || !Number.isFinite(beat)) return 0
   const ph = ((now - downbeat) / beat) % 1
   return ph < 0 ? ph + 1 : ph
 }

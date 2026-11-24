@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react'
+import { lightBus } from '../light/lightBus'
+import { levelFromDb } from '../light/lightMath'
 
 const FLOOR_DB = -60
 
@@ -33,12 +35,14 @@ export default function LevelMeter({ stream }: { stream: MediaStream }) {
         bar.current.style.width = `${frac * 100}%`
         bar.current.classList.toggle('hot', db > -3)
       }
+      lightBus.setLevel(levelFromDb(db))
       meter.current?.setAttribute('aria-valuenow', String(Math.round(Math.max(db, FLOOR_DB))))
       raf = requestAnimationFrame(tick)
     }
     tick()
     return () => {
       cancelAnimationFrame(raf)
+      lightBus.setLevel(0)
       void ctx.close().catch(() => undefined)
     }
   }, [stream])

@@ -2,6 +2,7 @@ import type { RecordingKind, Song } from '../domain/types'
 import { recordingFileName } from '../domain/time'
 import { ChunkWriter } from '../storage/chunkWriter'
 import type { FsDir } from '../storage/fsDir'
+import type { TakeBeatPlan } from '../light/lightMath'
 import { planCountIn } from './countInPlan'
 import { buildGraph, type Graph, type TrackInput } from './graph'
 import { defaultLatencyMs } from './latency'
@@ -33,6 +34,8 @@ export interface TakeOptions {
   onElapsed(sec: number): void
   /** Non-fatal hint, e.g. the chosen output could not be opened. */
   onNotice?(message: string): void
+  /** Called once right after the count-in is scheduled; read-only hook for the light layer. */
+  onBeatPlan?(p: { ctx: BaseAudioContext; plan: TakeBeatPlan }): void
 }
 /** done: the file name, or null if cancelled; rejects with a Turkish message on failure. */
 export interface Take { stop(): void; cancel(): void; done: Promise<string | null> }
@@ -193,6 +196,11 @@ export function startTake(o: TakeOptions, deps: EngineDeps = {}): Take {
 
     const beats = plan.clickTimes.length
     plan.clickTimes.forEach((t, i) => i > 0 && at(c, t, () => o.onCountdown(beats - i)))
+    try {
+      o.onBeatPlan?.({ ctx: c, plan: { clickTimes: plan.clickTimes, downbeat: plan.downbeat, bpm: o.song.bpm } })
+    } catch {
+      /* a light-layer failure must never break a take */
+    }
     // The writer starts only here, so a cancelled count-in leaves nothing on disk.
     at(c, plan.recorderStart, () => {
       if (state !== 'countingIn' || settled) return
