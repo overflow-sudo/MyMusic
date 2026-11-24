@@ -8,14 +8,23 @@ vi.mock('../storage/folderHandle', () => ({
   pickFolder: vi.fn(),
   ensurePermission: vi.fn(),
 }))
+vi.mock('../storage/chunkWriter', () => ({ recoverPending: vi.fn() }))
 import * as fh from '../storage/folderHandle'
+import { recoverPending } from '../storage/chunkWriter'
 import App from '../App'
 import FolderGate from './FolderGate'
 
 const w = window as unknown as { showDirectoryPicker?: unknown }
 const notFound = () => new DOMException('gone', 'NotFoundError')
 
+const okHandle = () =>
+  ({
+    getDirectoryHandle: vi.fn(async () => ({})),
+    getFileHandle: vi.fn().mockRejectedValue(notFound()),
+  }) as unknown as FileSystemDirectoryHandle
+
 beforeEach(() => {
+  vi.mocked(recoverPending).mockResolvedValue([])
   w.showDirectoryPicker = vi.fn()
   vi.mocked(fh.getSavedHandle).mockResolvedValue(null)
 })
@@ -76,5 +85,35 @@ describe('App shell', () => {
     vi.mocked(fh.ensurePermission).mockResolvedValue(true)
     render(<App />)
     await waitFor(() => expect(screen.getByText('Şarkı listesi burada olacak')).toBeInTheDocument())
+  })
+  it('denied reconnect shows feedback', async () => {
+    const handle = {} as FileSystemDirectoryHandle
+    vi.mocked(fh.getSavedHandle).mockResolvedValue(handle)
+    vi.mocked(fh.ensurePermission).mockResolvedValueOnce(false).mockResolvedValueOnce(false)
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Klasöre tekrar bağlan' }))
+    expect(await screen.findByText('Klasöre erişim izni verilmedi.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Klasöre tekrar bağlan' })).toBeInTheDocument()
+  })
+  it('pick failure shows a note', async () => {
+    vi.mocked(fh.pickFolder).mockRejectedValue(new Error('boom'))
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Klasör seç' }))
+    expect(await screen.findByText('Klasör seçilemedi, lütfen tekrar dene.')).toBeInTheDocument()
+  })
+  it('recoverPending failure keeps reconnect offered', async () => {
+    vi.mocked(recoverPending).mockRejectedValue(new Error('io'))
+    vi.mocked(fh.getSavedHandle).mockResolvedValue(okHandle())
+    vi.mocked(fh.ensurePermission).mockResolvedValue(true)
+    render(<App />)
+    expect(await screen.findByRole('button', { name: 'Klasöre tekrar bağlan' })).toBeInTheDocument()
+  })
+  it('shows toast for recovered recordings', async () => {
+    vi.mocked(recoverPending).mockResolvedValue(['a.webm', 'b.webm'])
+    vi.mocked(fh.getSavedHandle).mockResolvedValue(okHandle())
+    vi.mocked(fh.ensurePermission).mockResolvedValue(true)
+    render(<App />)
+    expect(await screen.findByText('2 yarım kayıt kurtarıldı')).toBeInTheDocument()
+    expect(screen.getByText('Şarkı listesi burada olacak')).toBeInTheDocument()
   })
 })
