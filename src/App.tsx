@@ -6,6 +6,7 @@ import { fromHandle } from './storage/fsDir'
 import { recoverPending } from './storage/chunkWriter'
 import BrokenLibrary from './ui/BrokenLibrary'
 import FolderGate from './ui/FolderGate'
+import SongDetail from './ui/SongDetail'
 import SongList from './ui/SongList'
 import Unsupported from './ui/Unsupported'
 import './ui/app.css'
@@ -23,6 +24,7 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
   const lib = useLibrary(root)
   const [selectedSongId, setSelectedSongId] = useState<string | null>(null)
   const [recordingCounts, setRecordingCounts] = useState<Record<string, number>>({})
+  const [countsVersion, setCountsVersion] = useState(0)
   const songs = lib.library.songs
   useEffect(() => {
     if (lib.status !== 'ready') return
@@ -41,28 +43,38 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
     return () => {
       cancelled = true
     }
-  }, [root, songs, lib.status])
+  }, [root, songs, lib.status, countsVersion])
   if (lib.status === 'loading') return <main className="screen"><p>Yükleniyor…</p></main>
   if (lib.status === 'broken') return <BrokenLibrary error={lib.error} onReset={() => void lib.resetBroken()} />
   const selected = selectedSongId ? songs.find((s) => s.id === selectedSongId) : undefined
-  if (selected) {
-    // Task 6 replaces this stub with SongDetail.
-    return (
-      <main className="screen">
-        <button onClick={() => setSelectedSongId(null)}>‹ Geri</button>
-        <p>{selected.title} — yakında</p>
-      </main>
-    )
-  }
+  // SongList stays mounted (hidden) so its tab and search survive opening a song.
   return (
-    <SongList
-      library={lib.library}
-      onOpen={setSelectedSongId}
-      onAdd={async (input) => {
-        await lib.addSong(input)
-      }}
-      recordingCounts={recordingCounts}
-    />
+    <>
+      <div hidden={!!selected}>
+        <SongList
+          library={lib.library}
+          onOpen={setSelectedSongId}
+          onAdd={async (input) => {
+            await lib.addSong(input)
+          }}
+          recordingCounts={recordingCounts}
+        />
+      </div>
+      {selected && (
+        <SongDetail
+          key={selected.id}
+          song={selected}
+          root={root}
+          patchSong={lib.patchSong}
+          deleteSong={lib.deleteSong}
+          recordingsVersion={countsVersion}
+          onBack={() => {
+            setSelectedSongId(null)
+            setCountsVersion((v) => v + 1)
+          }}
+        />
+      )}
+    </>
   )
 }
 
