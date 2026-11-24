@@ -96,6 +96,16 @@ describe('LightLayer', () => {
     expect(cssVar('--lvl')).toBe('0')
   })
 
+  it('reduced motion: static glow takes the song hue when the bus hue bpm changes', () => {
+    stubMotion(true)
+    render(<LightLayer />)
+    expect(cssVar('--beat-h')).toBe('205.0')
+    act(() => lightBus.setHueBpm(60))
+    expect(cssVar('--beat-h')).toBe('230.0')
+    act(() => lightBus.setHueBpm(null))
+    expect(cssVar('--beat-h')).toBe('205.0')
+  })
+
   it('cancels its frame on unmount', () => {
     const { unmount } = render(<LightLayer />)
     unmount()

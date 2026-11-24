@@ -124,6 +124,7 @@ function TrackControls({ track, onImport, onRemove, onChange, loadFile }: { trac
         <Player
           src={url}
           kind="audio"
+          volume={volume / 100}
           onTime={(t) => {
             now.current = t
           }}

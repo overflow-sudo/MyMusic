@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import Drawer from './Drawer'
 
 afterEach(cleanup)
@@ -49,5 +49,22 @@ describe('Drawer', () => {
     render(<Harness />)
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+  it('closing pauses any audio/video playing inside it', () => {
+    function MediaHarness() {
+      const [open, setOpen] = useState(true)
+      return (
+        <Drawer open={open} onClose={() => setOpen(false)} title="Panel">
+          <audio data-testid="a" />
+          <video data-testid="v" />
+        </Drawer>
+      )
+    }
+    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+    render(<MediaHarness />)
+    expect(pause).not.toHaveBeenCalled()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(pause).toHaveBeenCalledTimes(2)
+    pause.mockRestore()
   })
 })

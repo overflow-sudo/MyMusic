@@ -22,6 +22,12 @@ export default function Drawer({ open, onClose, title, children }: Props) {
     onCloseRef.current = onClose
   })
 
+  // Closing never leaves sound running behind the panel (e.g. the track preview after Esc).
+  useEffect(() => {
+    if (open) return
+    body.current?.querySelectorAll<HTMLMediaElement>('audio, video').forEach((m) => m.pause())
+  }, [open])
+
   useEffect(() => {
     if (!open) return
     returnTo.current = document.activeElement instanceof HTMLElement ? document.activeElement : null

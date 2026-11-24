@@ -7,13 +7,15 @@ export interface PlayerProps {
   src: string
   kind: 'audio' | 'video'
   autoPlay?: boolean
+  /** 0..1, applied to the media element. */
+  volume?: number
   onTime?(sec: number): void
   extra?: ReactNode
 }
 
 const STEP = 5
 
-export default function Player({ src, kind, autoPlay, onTime, extra }: PlayerProps) {
+export default function Player({ src, kind, autoPlay, volume, onTime, extra }: PlayerProps) {
   const ref = useRef<HTMLAudioElement & HTMLVideoElement>(null)
   const probedSrc = useRef<string | null>(null)
   const onTimeRef = useRef(onTime)
@@ -35,6 +37,10 @@ export default function Player({ src, kind, autoPlay, onTime, extra }: PlayerPro
     const el = ref.current
     return el ? register(el) : undefined
   }, [])
+
+  useEffect(() => {
+    if (ref.current && volume !== undefined) ref.current.volume = Math.min(1, Math.max(0, volume))
+  }, [volume])
 
   const readDuration = () => {
     const el = ref.current

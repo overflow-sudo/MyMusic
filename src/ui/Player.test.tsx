@@ -129,4 +129,12 @@ describe('Player', () => {
     expect(media(container).hasAttribute('controls')).toBe(false)
     expect(screen.getByText('Buradan başla')).toBeInTheDocument()
   })
+
+  it('applies the volume prop to its element and follows changes', () => {
+    const { container, rerender } = render(<Player src="blob:x" kind="audio" volume={0.4} />)
+    expect(media(container).volume).toBeCloseTo(0.4)
+    rerender(<Player src="blob:x" kind="audio" volume={0.9} />)
+    expect(media(container).volume).toBeCloseTo(0.9)
+  })
 })
+

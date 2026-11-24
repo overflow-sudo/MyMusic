@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { audioConstraints, videoConstraints } from '../audio/constraints'
+import { createPortal } from 'react-dom'
 import { listDevices, saveDevice, savedDevice, suggestedOutput, type DeviceKind } from '../audio/devices'
+import { errName, inputLabel, mediaErrorMessage, noDevices, openStream, stopStream, type Devices } from './recorderMedia'
 import { decodeTrack, startTake, type Take, type TakeOptions } from '../audio/engine'
 import type { SessionState } from '../audio/sessionMachine'
 import { pauseAll } from './mediaCoordinator'
 import { isTypingTarget, shortcutAction } from '../audio/shortcuts'
 import { formatTimecode } from '../domain/time'
 import type { RecordingKind, Song } from '../domain/types'
+import { lightBus } from '../light/lightBus'
 import type { FsDir } from '../storage/fsDir'
 import { readTrack } from '../storage/repo'
 import CountdownOverlay from './CountdownOverlay'
@@ -28,34 +30,8 @@ const TRACK_MISSING = 'Parça dosyası bulunamadı, parçasız kaydediliyor.'
 const TRACK_PAST_END = 'Başlangıç noktası parçanın sonundan sonra, parçasız kaydediliyor.'
 const TRACK_UNDECODABLE = 'Parça dosyası okunamadı, parçasız kaydediliyor.'
 
-type Devices = { mics: MediaDeviceInfo[]; cams: MediaDeviceInfo[]; outs: MediaDeviceInfo[] }
-const noDevices: Devices = { mics: [], cams: [], outs: [] }
-const errName = (e: unknown) => (e instanceof Error || e instanceof DOMException ? e.name : '')
-
-async function mediaErrorMessage(e: unknown, kind: RecordingKind): Promise<string> {
-  const name = errName(e)
-  if (name === 'NotAllowedError' || name === 'SecurityError')
-    return kind === 'video' ? 'Kamera ve mikrofona erişim izni verilmedi.' : 'Mikrofona erişim izni verilmedi.'
-  if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-    if (kind === 'ses') return 'Mikrofon bulunamadı.'
-    const d = await listDevices().catch(() => noDevices)
-    return d.mics.length === 0 && d.cams.length > 0 ? 'Mikrofon bulunamadı.' : 'Kamera bulunamadı.'
-  }
-  if (name === 'NotReadableError') return 'Cihaz açılamadı; başka bir uygulama kullanıyor olabilir.'
-  return 'Cihaz açılamadı.'
-}
-
-function openStream(kind: RecordingKind, mic: string, cam: string) {
-  return navigator.mediaDevices.getUserMedia({
-    audio: audioConstraints(mic || undefined),
-    video: kind === 'video' ? videoConstraints(cam || undefined) : false,
-  })
-}
-
-const stopStream = (s: MediaStream | null) => s?.getTracks().forEach((t) => t.stop())
-
 export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnabled = true }: Props) {
-  const [mode, setMode] = useState<RecordingKind | null>(null)
+  const [mode, setMode] = useState<RecordingKind>('ses')
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [devices, setDevices] = useState<Devices>(noDevices)
   const [mic, setMic] = useState(() => savedDevice('mic') ?? '')
@@ -75,6 +51,9 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
   const starting = useRef(false)
   const sessionRef = useRef<SessionState>('idle')
   const decoded = useRef<{ key: string; buffer: AudioBuffer } | null>(null)
+  const bpmRef = useRef(song.bpm)
+  // The drawer's device section comes after the recorder in the DOM, so look it up once mounted.
+  const [deviceSlot, setDeviceSlot] = useState<HTMLElement | null>(null)
 
   const releaseStream = () => {
     stopStream(streamRef.current)
@@ -122,7 +101,7 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
     if (kind === 'out') return setOut(id)
     if (kind === 'mic') setMic(id)
     else setCam(id)
-    if (mode) void acquire(mode, kind === 'mic' ? id : mic, kind === 'cam' ? id : cam)
+    void acquire(mode, kind === 'mic' ? id : mic, kind === 'cam' ? id : cam)
   }
 
   const notify = (m: string) => setNotices((n) => (n.includes(m) ? n : [...n, m]))
@@ -154,7 +133,7 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
   const start = async () => {
     const input = streamRef.current
     const st = sessionRef.current
-    if (!mode || !input || take.current || starting.current || (st !== 'idle' && st !== 'error')) return
+    if (!input || take.current || starting.current || (st !== 'idle' && st !== 'error')) return
     starting.current = true
     setPreparing(true)
     setError(null)
@@ -176,6 +155,10 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
         onCountdown: setBeats,
         onElapsed: setElapsed,
         onNotice: notify,
+        // The rhythm light follows the metronome exactly during the take.
+        onBeatPlan: ({ ctx, plan }) => {
+          if (mounted.current && take.current === t) lightBus.setSource({ kind: 'take', ctx, plan })
+        },
       })
       take.current = t
       t.done
@@ -185,6 +168,8 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
         )
         .finally(() => {
           if (take.current === t) take.current = null
+          // Saved, cancelled or failed: back to the song's free pulse (unless the screen is gone).
+          if (mounted.current && lightBus.getSource().kind === 'take') lightBus.setSource({ kind: 'free', bpm: bpmRef.current })
         })
     } finally {
       starting.current = false
@@ -198,6 +183,7 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
   useEffect(() => {
     startRef.current = start
     enabledRef.current = shortcutsEnabled
+    bpmRef.current = song.bpm
   })
 
   useEffect(() => {
@@ -222,6 +208,9 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
 
   useEffect(() => {
     mounted.current = true
+    setDeviceSlot(document.getElementById('device-settings')) // eslint-disable-line react-hooks/set-state-in-effect -- DOM lookup after commit
+    // Once, with the saved devices: the song screen opens in ses mode with the mic preview on.
+    void acquire('ses', mic, cam)
     return () => {
       mounted.current = false
       // Latest values are intended: the take/stream running at unmount are the ones to stop.
@@ -230,75 +219,76 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
       stopStream(streamRef.current)
       streamRef.current = null
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const busy = session === 'countingIn' || session === 'recording' || session === 'finalizing'
-  const canStart = !!mode && !!stream && !busy && !preparing
+  const canStart = !!stream && !busy && !preparing
+
+  const selectors = (
+    <DeviceSelectors
+      {...devices}
+      mic={mic}
+      cam={cam}
+      out={out ?? ''}
+      showCam={mode === 'video'}
+      disabled={busy}
+      onChange={changeDevice}
+    />
+  )
+
+  let recordLabel = 'Kaydet'
+  if (session === 'finalizing') recordLabel = 'Kaydediliyor…'
+  else if (busy) recordLabel = 'Durdur'
+  else if (preparing) recordLabel = 'Hazırlanıyor…'
 
   return (
     <section className="recorder">
-      <div className="row">
-        <button aria-pressed={mode === 'ses'} disabled={busy} onClick={() => chooseMode('ses')}>
-          🎙 Ses kaydı
-        </button>
-        <button aria-pressed={mode === 'video'} disabled={busy} onClick={() => chooseMode('video')}>
-          🎥 Video kaydı
-        </button>
+      <div className={`stage rec-stage rec-stage-${mode}`}>
+        {mode === 'video' && stream && <Preview stream={stream} />}
+        <span className="stage-label">{inputLabel(mode, stream)}</span>
+        {session === 'recording' && <span className="stage-rec elapsed">● {formatTimecode(elapsed)}</span>}
+        {session === 'countingIn' && <CountdownOverlay beatsLeft={beats} onCancel={() => take.current?.cancel()} />}
       </div>
-      {mode && (
-        <>
-          <DeviceSelectors
-            {...devices}
-            mic={mic}
-            cam={cam}
-            out={out ?? ''}
-            showCam={mode === 'video'}
-            disabled={busy}
-            onChange={changeDevice}
-          />
-          {mode === 'video' && stream && <Preview stream={stream} />}
-          {stream && <LevelMeter stream={stream} />}
-          <div className="row">
-            {session === 'finalizing' ? (
-              <button disabled>Kaydediliyor…</button>
-            ) : busy ? (
-              <button
-                className="record stop"
-                onClick={(e) => {
-                  e.currentTarget.blur()
-                  take.current?.stop()
-                }}
-              >
-                ■ Durdur
-              </button>
-            ) : (
-              <button
-                className="record"
-                disabled={!canStart}
-                onClick={(e) => {
-                  e.currentTarget.blur()
-                  void start()
-                }}
-              >
-                {preparing ? 'Hazırlanıyor…' : '● Kaydet'}
-              </button>
-            )}
-            {session === 'recording' && <span className="elapsed">● {formatTimecode(elapsed)}</span>}
-            {!busy && <span className="muted">Boşluk: başlat / durdur</span>}
-          </div>
-        </>
+      {(notices.length > 0 || error) && (
+        <div className="rec-notes">
+          {notices.map((n) => (
+            <p key={n} className="rec-note" role="status">
+              {n}
+            </p>
+          ))}
+          {error && (
+            <p className="rec-note rec-error" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
       )}
-      {notices.map((n) => (
-        <p key={n} className="note" role="status">
-          {n}
-        </p>
-      ))}
-      {error && (
-        <p className="note" role="alert">
-          {error}
-        </p>
-      )}
-      {session === 'countingIn' && <CountdownOverlay beatsLeft={beats} onCancel={() => take.current?.cancel()} />}
+      <div className="rec-bar">
+        <div className="seg rec-mode" role="group" aria-label="Kayıt türü">
+          <button type="button" aria-pressed={mode === 'ses'} disabled={busy} onClick={() => mode !== 'ses' && chooseMode('ses')}>
+            Ses
+          </button>
+          <button type="button" aria-pressed={mode === 'video'} disabled={busy} onClick={() => mode !== 'video' && chooseMode('video')}>
+            Video
+          </button>
+        </div>
+        <div className="rec-level">{stream ? <LevelMeter stream={stream} /> : <div className="level-meter" aria-hidden="true" />}</div>
+        <button
+          type="button"
+          className={busy ? 'rec-button recording' : 'rec-button'}
+          aria-label={recordLabel}
+          disabled={session === 'finalizing' || (!busy && !canStart)}
+          onClick={(e) => {
+            e.currentTarget.blur()
+            if (busy) take.current?.stop()
+            else void start()
+          }}
+        >
+          <span className="rec-button-mark" aria-hidden="true" />
+        </button>
+        <span className="rec-hint">Boşluk: başlat / durdur</span>
+      </div>
+      {deviceSlot ? createPortal(selectors, deviceSlot) : <div className="rec-devices">{selectors}</div>}
     </section>
   )
 }

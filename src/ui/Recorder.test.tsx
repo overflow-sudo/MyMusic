@@ -1,9 +1,10 @@
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { decodeTrack, startTake, type TakeOptions } from '../audio/engine'
 import { createSong } from '../domain/library'
 import type { Song } from '../domain/types'
+import { lightBus } from '../light/lightBus'
 import { createMemoryDir } from '../storage/memoryDir'
 import { songDir } from '../storage/repo'
 import { register } from './mediaCoordinator'
@@ -66,10 +67,11 @@ function renderRecorder(song: Song, root = createMemoryDir(), onSaved = vi.fn(),
   return { root, onSaved }
 }
 
+/** The song screen opens in ses mode and acquires the mic by itself. */
 async function chooseAudio() {
-  fireEvent.click(screen.getByRole('button', { name: '🎙 Ses kaydı' }))
-  await waitFor(() => expect(screen.getByRole('button', { name: '● Kaydet' })).toBeEnabled())
-  await screen.findByRole('option', { name: 'Speakers (M-Audio M-Track Solo)' })
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Kaydet' })).toBeEnabled())
+  // hidden: the selectors may sit in the (closed, aria-hidden) settings drawer
+  await screen.findByRole('option', { name: 'Speakers (M-Audio M-Track Solo)', hidden: true })
 }
 
 const lastOptions = () => startTakeMock.mock.calls.at(-1)![0] as TakeOptions
@@ -92,7 +94,7 @@ describe('Recorder', () => {
     const off = register(el)
     renderRecorder(plain)
     await chooseAudio()
-    fireEvent.click(screen.getByRole('button', { name: '● Kaydet' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
     off()
     expect(pause).toHaveBeenCalled()
@@ -102,7 +104,7 @@ describe('Recorder', () => {
   it('missing track file: Turkish message, records without track', async () => {
     renderRecorder(withTrack(0))
     await chooseAudio()
-    fireEvent.click(screen.getByRole('button', { name: '● Kaydet' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     expect(await screen.findByText('Parça dosyası bulunamadı, parçasız kaydediliyor.')).toBeInTheDocument()
     await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
     expect(lastOptions().track).toBeUndefined()
@@ -118,7 +120,7 @@ describe('Recorder', () => {
     decodeMock.mockResolvedValue({ duration: 10 } as AudioBuffer)
     renderRecorder(song, root)
     await chooseAudio()
-    fireEvent.click(screen.getByRole('button', { name: '● Kaydet' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     expect(await screen.findByText('Başlangıç noktası parçanın sonundan sonra, parçasız kaydediliyor.')).toBeInTheDocument()
     await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
     expect(lastOptions().track).toBeUndefined()
@@ -132,24 +134,88 @@ describe('Recorder', () => {
     decodeMock.mockResolvedValue(buffer)
     renderRecorder(song, root)
     await chooseAudio()
-    fireEvent.click(screen.getByRole('button', { name: '● Kaydet' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
     expect(lastOptions().track).toEqual({ buffer, startSec: 3, volume: 0.7 })
   })
 
-  it('permission denied shows a Turkish message', async () => {
+  it('opens in ses mode and asks for the mic once, without a click', async () => {
+    renderRecorder(plain)
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(1))
+    expect(getUserMedia.mock.calls[0][0]).toMatchObject({ video: false })
+    expect(screen.getByRole('button', { name: 'Ses' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Video' })).toHaveAttribute('aria-pressed', 'false')
+    await chooseAudio()
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
+  })
+
+  it('permission denied on the automatic open: Turkish message, still usable, Kaydet disabled', async () => {
     getUserMedia.mockRejectedValue(new DOMException('denied', 'NotAllowedError'))
     renderRecorder(plain)
-    fireEvent.click(screen.getByRole('button', { name: '🎙 Ses kaydı' }))
     expect(await screen.findByText('Mikrofona erişim izni verilmedi.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '● Kaydet' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Kaydet' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Video' })).toBeEnabled()
+    fireEvent.keyDown(document.body, { key: ' ' })
+    await act(async () => {})
+    expect(startTakeMock).not.toHaveBeenCalled()
   })
 
   it('missing camera shows a Turkish message', async () => {
-    getUserMedia.mockRejectedValue(new DOMException('none', 'NotFoundError'))
     renderRecorder(plain)
-    fireEvent.click(screen.getByRole('button', { name: '🎥 Video kaydı' }))
+    await chooseAudio()
+    getUserMedia.mockRejectedValue(new DOMException('none', 'NotFoundError'))
+    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
     expect(await screen.findByText('Kamera bulunamadı.')).toBeInTheDocument()
+    expect(getUserMedia.mock.calls.at(-1)![0]).toMatchObject({ video: expect.anything() })
+  })
+
+  it('record button is named Kaydet, then Durdur while the take runs', async () => {
+    renderRecorder(plain)
+    await chooseAudio()
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
+    await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
+    act(() => lastOptions().onState('recording'))
+    expect(screen.getByRole('button', { name: 'Durdur' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'Kaydet' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Durdur' }))
+    expect(takeStop).toHaveBeenCalledTimes(1)
+  })
+
+  it('drives the rhythm light from the take, back to the song tempo when it settles', async () => {
+    lightBus.setSource({ kind: 'free', bpm: plain.bpm })
+    renderRecorder(plain)
+    await chooseAudio()
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
+    await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
+    const ctx = { currentTime: 0 } as BaseAudioContext
+    const plan = { clickTimes: [1, 1.6], downbeat: 2.2, bpm: 94 }
+    act(() => lastOptions().onBeatPlan!({ ctx, plan }))
+    expect(lightBus.getSource()).toEqual({ kind: 'take', ctx, plan })
+    await act(async () => finishTake('x.webm'))
+    expect(lightBus.getSource()).toEqual({ kind: 'free', bpm: 94 })
+  })
+
+  it('a failed take also hands the light back to the song tempo', async () => {
+    renderRecorder(plain)
+    await chooseAudio()
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
+    await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
+    act(() => lastOptions().onBeatPlan!({ ctx: { currentTime: 0 } as BaseAudioContext, plan: { clickTimes: [], downbeat: 0, bpm: 94 } }))
+    await act(async () => failTake(new Error('Kayıt diske yazılamadı.')))
+    expect(lightBus.getSource()).toEqual({ kind: 'free', bpm: 94 })
+  })
+
+  it('device selectors render inside #device-settings when it exists, inline otherwise', async () => {
+    renderRecorder(plain, undefined, undefined, <div id="device-settings" data-testid="slot" />)
+    await chooseAudio()
+    const slot = screen.getByTestId('slot')
+    expect(within(slot).getByLabelText('Mikrofon')).toBeInTheDocument()
+    expect(within(slot).getByLabelText('Metronom çıkışı')).toBeInTheDocument()
+    expect(document.querySelector('.recorder')!.querySelector('.device-selectors')).toBeNull()
+    cleanup()
+    renderRecorder(plain)
+    await chooseAudio()
+    expect(document.querySelector('.recorder .device-selectors')).not.toBeNull()
   })
 
   it('Space on the body starts; while typing in the tempo input it does not', async () => {
@@ -210,6 +276,26 @@ describe('Recorder', () => {
     expect(startTakeMock).not.toHaveBeenCalled()
   })
 
+  it('Space with focus on the body does nothing while the song drawer is open', async () => {
+    const root = createMemoryDir()
+    render(
+      <SongDetail
+        song={plain}
+        root={root}
+        onBack={() => {}}
+        patchSong={async () => {}}
+        deleteSong={async () => {}}
+        recorder={(drawerOpen) => <Recorder song={plain} root={root} latencyMs={null} onSaved={() => {}} shortcutsEnabled={!drawerOpen} />}
+      />,
+    )
+    await chooseAudio()
+    fireEvent.click(screen.getByRole('button', { name: 'Şarkı ayarları' }))
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    fireEvent.keyDown(document.body, { key: ' ' })
+    await act(async () => {})
+    expect(startTakeMock).not.toHaveBeenCalled()
+  })
+
   it('Kaydet is disabled with "Hazırlanıyor…" while the track decodes', async () => {
     const song = withTrack(0)
     const root = createMemoryDir()
@@ -218,7 +304,7 @@ describe('Recorder', () => {
     decodeMock.mockReturnValue(new Promise((r) => (finishDecode = r)))
     renderRecorder(song, root)
     await chooseAudio()
-    fireEvent.click(screen.getByRole('button', { name: '● Kaydet' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     expect(await screen.findByRole('button', { name: 'Hazırlanıyor…' })).toBeDisabled()
     expect(fireEvent.keyDown(document.body, { key: ' ' })).toBe(false)
     await act(async () => finishDecode({ duration: 100 } as AudioBuffer))
@@ -231,7 +317,7 @@ describe('Recorder', () => {
     fireEvent.keyDown(document.body, { key: ' ' })
     await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
     act(() => lastOptions().onState('countingIn'))
-    const button = screen.getByRole('button', { name: '■ Durdur' })
+    const button = screen.getByRole('button', { name: 'Durdur' })
     button.focus()
     expect(fireEvent.keyDown(button, { key: ' ' })).toBe(false) // default (button click) suppressed
     expect(takeStop).not.toHaveBeenCalled()
@@ -243,7 +329,7 @@ describe('Recorder', () => {
   it('shows the countdown and elapsed time; Space stops while recording', async () => {
     renderRecorder(plain)
     await chooseAudio()
-    fireEvent.click(screen.getByRole('button', { name: '● Kaydet' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
     const o = lastOptions()
     act(() => {
@@ -264,7 +350,7 @@ describe('Recorder', () => {
   it('calls onSaved when the take is written', async () => {
     const { onSaved } = renderRecorder(plain)
     await chooseAudio()
-    fireEvent.click(screen.getByRole('button', { name: '● Kaydet' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
     await act(async () => finishTake('2026-11-24_21-30-05_ses.webm'))
     expect(onSaved).toHaveBeenCalledTimes(1)
@@ -273,7 +359,7 @@ describe('Recorder', () => {
   it('a failed take shows its message and does not call onSaved', async () => {
     const { onSaved } = renderRecorder(plain)
     await chooseAudio()
-    fireEvent.click(screen.getByRole('button', { name: '● Kaydet' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
     await act(async () => {
       lastOptions().onState('error')
@@ -286,7 +372,7 @@ describe('Recorder', () => {
   it('unmount stops the preview stream and the running take', async () => {
     renderRecorder(plain)
     await chooseAudio()
-    fireEvent.click(screen.getByRole('button', { name: '● Kaydet' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
     cleanup()
     expect(takeStop).toHaveBeenCalledTimes(1)

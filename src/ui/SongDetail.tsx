@@ -15,8 +15,8 @@ interface Props {
   onBack: () => void
   patchSong: (id: string, patch: Partial<Song>) => Promise<void>
   deleteSong: (id: string) => Promise<void>
-  /** Slot where the recorder is mounted; shown in the stage area. */
-  recorder?: ReactNode
+  /** Slot where the recorder is mounted; shown in the stage area. A function also learns whether the drawer is open. */
+  recorder?: ReactNode | ((drawerOpen: boolean) => ReactNode)
   /** Extra content for the drawer's device section (the Recorder portals into #device-settings). */
   drawerSlot?: ReactNode
   /** Bumped by the parent when a take was saved, so the list reloads. */
@@ -146,7 +146,7 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
           </button>
         </header>
 
-        {recorder && <div className="recorder-slot">{recorder}</div>}
+        {recorder && <div className="recorder-slot">{typeof recorder === 'function' ? recorder(drawerOpen) : recorder}</div>}
 
         <section className="song-recordings">
           <h2>Kayıtlar</h2>

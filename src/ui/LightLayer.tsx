@@ -37,11 +37,12 @@ export default function LightLayer() {
     if (mode === 'off') return
     const style = document.documentElement.style
     if (prefersReducedMotion()) {
-      style.setProperty('--beat-h', baseHue().toFixed(1))
+      const paint = () => style.setProperty('--beat-h', baseHue().toFixed(1))
+      paint()
       style.setProperty('--beat-a', '0.3')
       style.setProperty('--beat-s', '0.3')
       style.setProperty('--lvl', '0')
-      return
+      return lightBus.onHueBpmChange(paint)
     }
     let id = 0
     let last: number | null = null

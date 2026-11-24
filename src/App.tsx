@@ -12,6 +12,7 @@ import SettingsDialog from './ui/SettingsDialog'
 import SongDetail from './ui/SongDetail'
 import SongList from './ui/SongList'
 import Unsupported from './ui/Unsupported'
+import { useSongLight } from './ui/useSongLight'
 import './ui/app.css'
 
 const NOT_FOUND_NOTE = 'Klasör bulunamadı, lütfen tekrar seç.'
@@ -30,6 +31,8 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
   const [countsVersion, setCountsVersion] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const songs = lib.library.songs
+  const selected = selectedSongId ? songs.find((s) => s.id === selectedSongId) : undefined
+  useSongLight(selected ? selected.bpm : null)
   useEffect(() => {
     if (lib.status !== 'ready') return
     let cancelled = false
@@ -50,7 +53,6 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
   }, [root, songs, lib.status, countsVersion])
   if (lib.status === 'loading') return <main className="screen narrow"><p className="dim">Yükleniyor…</p></main>
   if (lib.status === 'broken') return <BrokenLibrary error={lib.error} onReset={lib.resetBroken} />
-  const selected = selectedSongId ? songs.find((s) => s.id === selectedSongId) : undefined
   // SongList stays mounted (hidden) so its tab and search survive opening a song.
   const latencyMs = lib.library.settings.latencyCompensationMs
   return (
@@ -81,15 +83,15 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
           patchSong={lib.patchSong}
           deleteSong={lib.deleteSong}
           recordingsVersion={countsVersion}
-          recorder={
+          recorder={(drawerOpen) => (
             <Recorder
               song={selected}
               root={root}
               latencyMs={latencyMs}
-              shortcutsEnabled={!settingsOpen}
+              shortcutsEnabled={!settingsOpen && !drawerOpen}
               onSaved={() => setCountsVersion((v) => v + 1)}
             />
-          }
+          )}
           onBack={() => {
             setSelectedSongId(null)
             setCountsVersion((v) => v + 1)

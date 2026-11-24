@@ -346,4 +346,35 @@ describe('SongDetail layout and settings drawer', () => {
     expect(screen.getByRole('button', { name: 'Düzenle' })).toHaveFocus()
     await screen.findByText('Henüz kayıt yok.')
   })
+  it('the track preview plays at the track volume', async () => {
+    Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:v'), revokeObjectURL: vi.fn() })
+    setup()
+    openDrawer()
+    fireEvent.change(screen.getByLabelText('Parça seç'), { target: { files: [new File(['abc'], 'b.mp3')] } })
+    await screen.findByRole('button', { name: 'Buradan başla' })
+    const audio = document.querySelector('.track-panel audio') as HTMLAudioElement
+    expect(audio.volume).toBeCloseTo(0.7)
+  })
+
+  it('a recorder render function learns whether the drawer is open', () => {
+    const seen: boolean[] = []
+    render(
+      <SongDetail
+        song={base}
+        root={createMemoryDir()}
+        onBack={() => {}}
+        patchSong={async () => {}}
+        deleteSong={async () => {}}
+        recorder={(open) => {
+          seen.push(open)
+          return <div>REC</div>
+        }}
+      />,
+    )
+    expect(seen.at(-1)).toBe(false)
+    openDrawer()
+    expect(seen.at(-1)).toBe(true)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(seen.at(-1)).toBe(false)
+  })
 })
