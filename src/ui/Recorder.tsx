@@ -3,6 +3,7 @@ import { audioConstraints, videoConstraints } from '../audio/constraints'
 import { listDevices, saveDevice, savedDevice, suggestedOutput, type DeviceKind } from '../audio/devices'
 import { decodeTrack, startTake, type Take, type TakeOptions } from '../audio/engine'
 import type { SessionState } from '../audio/sessionMachine'
+import { pauseAll } from './mediaCoordinator'
 import { isTypingTarget, shortcutAction } from '../audio/shortcuts'
 import { formatTimecode } from '../domain/time'
 import type { RecordingKind, Song } from '../domain/types'
@@ -162,6 +163,7 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
     try {
       const track = await loadTrack()
       if (!mounted.current || streamRef.current !== input) return
+      pauseAll() // one medium at a time
       const t = startTake({
         kind: mode,
         song,

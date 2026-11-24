@@ -34,6 +34,15 @@ describe('shortcutAction', () => {
     expect(isTypingTarget(body)).toBe(false)
     expect(isTypingTarget({ tagName: 'BUTTON' })).toBe(false)
   })
+  it('ignores anything inside a [data-player]', () => {
+    const wrap = document.createElement('div')
+    wrap.setAttribute('data-player', '')
+    const btn = document.createElement('button')
+    wrap.appendChild(btn)
+    expect(isTypingTarget(btn)).toBe(true)
+    expect(shortcutAction(' ', 'idle', btn)).toBeNull()
+    expect(isTypingTarget(document.createElement('button'))).toBe(false)
+  })
   it('ignores other keys', () => {
     expect(shortcutAction('a', 'idle', body)).toBeNull()
   })

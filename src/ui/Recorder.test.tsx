@@ -164,10 +164,13 @@ describe('Recorder', () => {
       <>
         <audio controls data-testid="audio" />
         <video controls data-testid="video" />
+        <div data-player>
+          <button data-testid="player-btn">Oynat</button>
+        </div>
       </>
     ))
     await chooseAudio()
-    for (const id of ['audio', 'video']) expect(fireEvent.keyDown(screen.getByTestId(id), { key: ' ' })).toBe(true)
+    for (const id of ['audio', 'video', 'player-btn']) expect(fireEvent.keyDown(screen.getByTestId(id), { key: ' ' })).toBe(true)
     await act(async () => {})
     expect(startTakeMock).not.toHaveBeenCalled()
   })
