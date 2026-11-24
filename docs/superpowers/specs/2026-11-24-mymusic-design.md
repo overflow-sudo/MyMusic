@@ -9,6 +9,7 @@ Gitar çalan tek bir kullanıcı için kişisel bir repertuar ve kayıt uygulama
 - hangi şarkıları **bildiğini** ve hangilerini **çalıştığını** tek bakışta görmek,
 - her şarkı için **ses ya da video kaydı** almak,
 - kayıttan önce şarkının temposunda bir **metronom sayımı** duymak (sayım bitince metronom susar, kayıt başlar),
+- isterse şarkıya bir **parça** (MP3 vb.) eklemek: sayım bitince parça çalar, kullanıcı onunla birlikte çalar ve **parçanın sesi kayda karışır**,
 - tüm kayıtların **kendi bilgisayarında** dosya olarak durmasını istiyor.
 
 Kullanıcının düzeni: **Windows**; gitar → **NUX MG-300** (efekt pedalı) → **M-Audio** ses kartı (Solo); ayrıca **kondenser mikrofon**; sinyaller **Voicemeeter** ile karıştırılıyor. Kullanıcı sesi **M-Audio'ya bağlı kulaklıktan** dinliyor. MG-300 bilgisayara tuş/MIDI göndermiyor; uygulamayı kontrol eden bir ayak pedalı **yok**.
@@ -16,7 +17,16 @@ Kullanıcının düzeni: **Windows**; gitar → **NUX MG-300** (efekt pedalı) �
 ## Hedefler
 
 1. Şarkı listesi: iki sekme, **Bildiğim** ve **Çalıştığım**; arama; şarkı ekleme.
-2. Şarkı alanları: ad, sanatçı, durum (bildiğim / çalıştığım), tempo (BPM), sayım vuruşu (varsayılan 4).
+2. Şarkı alanları: ad, sanatçı, durum (bildiğim / çalıştığım), tempo (BPM), sayım vuruşu (varsayılan 4); isteğe bağlı parça: dosya, başlangıç noktası (ör. `0:12`), parça sesi.
+2a. **Parça (altyapı / orijinal kayıt):**
+   - Şarkı ekranında **"Parça ekle"**: kullanıcı herhangi bir ses dosyası seçer (MP3, WAV, M4A, OGG…; tarayıcının çözebildiği her şey). Dosya şarkının klasörüne **kopyalanır**. Değiştir / kaldır mümkün.
+   - **Başlangıç noktası**: parça bu saniyeden çalmaya başlar (uzun girişi atlamak için). Varsayılan 0.
+   - **Parça sesi**: kaydedilen karışımdaki ve kulaklıktaki parça seviyesi (0–100 %, varsayılan 70 %), gitarın boğulmaması için.
+   - Kayıtta sayım bitince metronom susar, parça **ilk vuruş anında** başlangıç noktasından çalmaya başlar; metronomla aynı çıkıştan (M-Audio kulaklık) duyulur.
+   - **Kayda karışır:** kaydedilen dosya = seçilen giriş (Voicemeeter karışımı) + parça, uygulama içinde (Web Audio) karıştırılır. Video kayıtlarında bu karışık ses video ile birlikte yazılır.
+   - **Gecikme telafisi:** kullanıcı parçayı kulaklıktan gecikmeli duyar, gitarı da girişe gecikmeli ulaşır; karışımda gitar parçaya göre geride kalır. Bunu düzeltmek için ayarlarda genel bir **"Gecikme telafisi (ms)"** değeri olur: parça karışıma bu kadar geç eklenir. Varsayılan `AudioContext.baseLatency + outputLatency` + giriş gecikmesi tahmini; kullanıcı kulakla ince ayar yapar.
+   - Parça bitince kayıt 2 saniye sonra kendiliğinden durur (kullanıcı daha önce durdurabilir).
+   - Parçası olmayan şarkılarda akış değişmez.
 3. Şarkı ekranı: alanları düzenleme, durumu tek tıkla değiştirme, ses / video kaydı, o şarkının kayıtlarının listesi (en yeniden eskiye) ve uygulama içinde oynatma.
 4. Kayıt akışı:
    1. Ses ya da video modu seçilir; video modunda kamera önizlemesi açılır.
@@ -35,6 +45,7 @@ Kullanıcının düzeni: **Windows**; gitar → **NUX MG-300** (efekt pedalı) �
 
 - Akor, söz, ton, not alanları (sonra eklenebilir olmalı, ama şimdi yok).
 - Kayıt düzenleme / kırpma / MP4'e dönüştürme.
+- Parça ile senkron metronom (BPM algılama), parça hızını/tonunu değiştirme, parçayı ayrı iz olarak kaydetme.
 - Bulut, paylaşma, hesap, birden fazla kullanıcı.
 - Kayıt boyunca çalan metronom (yalnızca sayım var).
 - Firefox, Safari, mobil destek.
@@ -43,7 +54,8 @@ Kullanıcının düzeni: **Windows**; gitar → **NUX MG-300** (efekt pedalı) �
 ## Başarısızlık sayılacak şeyler (çalışsa bile)
 
 - Gitar sesinin boğuk / dalgalı kaydedilmesi (gürültü bastırma ya da otomatik seviye açık kalırsa).
-- Metronom sesinin kayda girmesi.
+- Metronom sesinin kayda girmesi (parça sesi girer, metronom girmez).
+- Karışımda gitarın parçaya göre belirgin şekilde geç duyulması.
 - Bir kaydın kaybolması — tarayıcı sekmesi kayıt sırasında kapanırsa bile o ana kadarki kısım diskte kalmalı.
 - Kayıtların kullanıcının göremediği bir yerde (tarayıcı deposunda) saklanması.
 - Gitar elindeyken fareye uzanmayı gerektiren bir başlatma/durdurma akışı (boşluk tuşu ikisini de yapar).
@@ -73,6 +85,7 @@ Kullanıcı **1**'i seçti.
 - Kayıtlar bilgisayara, kullanıcının klasörüne.
 - Repertuar grupları: Bildiğim / Çalıştığım.
 - Ekran taslakları (aşağıda) onaylandı.
+- Şarkıya MP3 vb. parça eklenebilir; sayımdan sonra parça çalar; **parça sesi kayda girer**.
 - Yaklaşım 1.
 
 ## Ekranlar
@@ -114,7 +127,7 @@ Arayüz dili Türkçe.
         2026-11-20_19-05-12_ses.webm
   ```
   Şarkı klasörü oluşturulduğu adla kalır (şarkı adı değişse bile id üzerinden bulunur).
-- **`mymusic.json` şeması:** `{ version: 1, songs: [{ id, title, artist, status: "known" | "learning", bpm, countInBeats, createdAt, updatedAt }] }`. Bilinmeyen alanlar korunur (ileride alan eklemek kolay olsun).
+- **`mymusic.json` şeması:** `{ version: 1, settings: { latencyCompensationMs }, songs: [{ id, title, artist, status: "known" | "learning", bpm, countInBeats, track?: { fileName, startSec, volume }, createdAt, updatedAt }] }`. Parça dosyası şarkı klasöründe `track.<uzantı>` olarak durur. Bilinmeyen alanlar korunur (ileride alan eklemek kolay olsun).
 - **Kayıt listesi** şarkı klasörü taranarak oluşturulur; böylece Dosya Gezgini'nden silinen dosya listeden de kalkar.
 - **Kaybolmaya karşı:** Chrome yazma akışını ancak `close()` ile diske işler, bu yüzden tek bir akış yeterli değil. MediaRecorder parçaları birkaç saniyelik numaralı dosyalar halinde `<klasör>/.parcalar/<kayıt-id>/` altına yazılır; durdurunca sırayla birleştirilip asıl `.webm` dosyası oluşturulur ve parça klasörü silinir. Açılışta yarım kalmış parça klasörü bulunursa birleştirilip kayıt kurtarılır. En fazla birkaç saniye kaybolur.
 - **Süre:** MediaRecorder'ın ürettiği webm dosyalarında süre bilgisi eksik olur; süre oynatma sırasında ya da kayıt anında ölçülüp gösterilir (uygulama içi bir yan dosyada veya `mymusic.json`'da saklanabilir — kurucunun kararı).
