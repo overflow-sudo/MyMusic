@@ -2,6 +2,9 @@ import '@testing-library/jest-dom/vitest'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import Player from './Player'
+import { measureDuration } from './measureDuration'
+
+vi.mock('./measureDuration', () => ({ measureDuration: vi.fn() }))
 import * as coordinator from './mediaCoordinator'
 
 let duration = 100
@@ -59,18 +62,32 @@ describe('Player', () => {
     expect(screen.getByText('0:42 / 1:40')).toBeInTheDocument()
   })
 
-  it('Infinity duration is measured by seeking far, then shows the real total and rewinds', () => {
+  it('Infinity duration is measured on a detached element; the live one is never seeked', async () => {
     duration = Infinity
+    vi.mocked(measureDuration).mockResolvedValue(125)
     const { container } = render(<Player src="blob:x" kind="audio" />)
-    const el = media(container)
-    loaded(el)
-    expect(current).toBe(1e9)
-    duration = 125
-    fireEvent(el, new Event('durationchange'))
+    loaded(media(container))
+    expect(measureDuration).toHaveBeenCalledWith('blob:x', 'ses')
     expect(current).toBe(0)
-    expect(screen.getByText('0:00 / 2:05')).toBeInTheDocument()
-    expect(() => fireEvent.click(screen.getByRole('button', { name: '5 saniye ileri' }))).not.toThrow()
+    expect(await screen.findByText('0:00 / 2:05')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '5 saniye ileri' }))
     expect(current).toBe(5)
+    expect(screen.getByRole('slider', { name: 'Konum' })).toHaveAttribute('aria-valuetext', '0:05 / 2:05')
+  })
+
+  it('autoPlay + Infinity duration keeps playing and resolves the total', async () => {
+    duration = Infinity
+    vi.mocked(measureDuration).mockResolvedValue(61)
+    const { container } = render(<Player src="blob:x" kind="video" autoPlay />)
+    const el = media(container)
+    expect(el.autoplay).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Oynat' }))
+    loaded(el)
+    expect(paused).toBe(false)
+    expect(current).toBe(0)
+    expect(await screen.findByText('0:00 / 1:01')).toBeInTheDocument()
+    expect(paused).toBe(false)
+    expect(screen.getByRole('button', { name: 'Duraklat' })).toBeInTheDocument()
   })
 
   it('play claims playback; the button toggles to Duraklat; unmount unregisters', () => {

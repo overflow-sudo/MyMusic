@@ -6,6 +6,7 @@ import { createSong } from '../domain/library'
 import type { Song } from '../domain/types'
 import { createMemoryDir } from '../storage/memoryDir'
 import { songDir } from '../storage/repo'
+import { register } from './mediaCoordinator'
 import Recorder from './Recorder'
 import SongDetail from './SongDetail'
 
@@ -83,6 +84,19 @@ describe('Recorder', () => {
       video: false,
     })
     expect(screen.getByText("Tık kayda girmesin: Voicemeeter'da tarayıcı sesini yalnızca A1'e (kulaklık) gönder, B hattına gönderme.")).toBeInTheDocument()
+  })
+
+  it('starting a take pauses every player before startTake', async () => {
+    const el = document.createElement('audio')
+    const pause = vi.spyOn(el, 'pause').mockImplementation(() => {})
+    const off = register(el)
+    renderRecorder(plain)
+    await chooseAudio()
+    fireEvent.click(screen.getByRole('button', { name: '● Kaydet' }))
+    await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
+    off()
+    expect(pause).toHaveBeenCalled()
+    expect(pause.mock.invocationCallOrder[0]).toBeLessThan(startTakeMock.mock.invocationCallOrder[0])
   })
 
   it('missing track file: Turkish message, records without track', async () => {

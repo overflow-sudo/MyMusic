@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { formatTimecode } from '../domain/time'
+import { measureDuration } from './measureDuration'
 import { claimPlayback, register } from './mediaCoordinator'
 
 export interface PlayerProps {
@@ -14,7 +15,7 @@ const STEP = 5
 
 export default function Player({ src, kind, autoPlay, onTime, extra }: PlayerProps) {
   const ref = useRef<HTMLAudioElement & HTMLVideoElement>(null)
-  const probing = useRef(false)
+  const probedSrc = useRef<string | null>(null)
   const onTimeRef = useRef(onTime)
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -25,6 +26,12 @@ export default function Player({ src, kind, autoPlay, onTime, extra }: PlayerPro
   })
 
   useEffect(() => {
+    setTime(0)
+    setDuration(0)
+    probedSrc.current = null
+  }, [src])
+
+  useEffect(() => {
     const el = ref.current
     return el ? register(el) : undefined
   }, [])
@@ -33,25 +40,19 @@ export default function Player({ src, kind, autoPlay, onTime, extra }: PlayerPro
     const el = ref.current
     if (!el) return
     const d = el.duration
-    if (d === Infinity) {
-      // MediaRecorder webm: seeking far past the end makes the browser compute the real length.
-      if (!probing.current) {
-        probing.current = true
-        el.currentTime = 1e9
-      }
-    } else if (Number.isFinite(d)) {
-      setDuration(d)
-      if (probing.current) {
-        probing.current = false
-        el.currentTime = 0
-        setTime(0)
-      }
+    if (Number.isFinite(d)) setDuration(d)
+    else if (d === Infinity && probedSrc.current !== src) {
+      // MediaRecorder webm: measure on a detached element so the live one is never seeked (autoplay keeps playing).
+      probedSrc.current = src
+      void measureDuration(src, kind === 'video' ? 'video' : 'ses').then((m) => {
+        if (probedSrc.current === src && m !== null) setDuration(m)
+      })
     }
   }
 
   const update = () => {
     const el = ref.current
-    if (!el || probing.current) return
+    if (!el) return
     setTime(el.currentTime)
     onTimeRef.current?.(el.currentTime)
   }
@@ -101,18 +102,19 @@ export default function Player({ src, kind, autoPlay, onTime, extra }: PlayerPro
       {kind === 'video' ? <video className="player-video" playsInline {...shared} /> : <audio {...shared} />}
       <div className="player-row">
         <button type="button" className="icon-btn" aria-label="5 saniye geri" onClick={() => seek((ref.current?.currentTime ?? 0) - STEP)}>
-          ⏮
+          −5
         </button>
         <button type="button" className="icon-btn player-play" aria-label={playing ? 'Duraklat' : 'Oynat'} onClick={toggle}>
           {playing ? '❚❚' : '▶'}
         </button>
         <button type="button" className="icon-btn" aria-label="5 saniye ileri" onClick={() => seek((ref.current?.currentTime ?? 0) + STEP)}>
-          ⏭
+          +5
         </button>
         <input
           type="range"
           className="player-seek"
           aria-label="Konum"
+          aria-valuetext={`${formatTimecode(time)} / ${formatTimecode(duration)}`}
           min={0}
           max={duration || 0}
           step={0.1}
