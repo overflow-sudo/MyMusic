@@ -16,10 +16,14 @@ export function formatTimecode(sec: number): string {
 
 const p2 = (n: number) => String(n).padStart(2, '0')
 
-export function recordingFileName(d: Date, kind: RecordingKind): string {
+export function formatStamp(d: Date): string {
   const date = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
   const time = `${p2(d.getHours())}-${p2(d.getMinutes())}-${p2(d.getSeconds())}`
-  return `${date}_${time}_${kind}.webm`
+  return `${date}_${time}`
+}
+
+export function recordingFileName(d: Date, kind: RecordingKind): string {
+  return `${formatStamp(d)}_${kind}.webm`
 }
 
 export function parseRecordingFileName(name: string): { date: Date; kind: RecordingKind } | null {
