@@ -32,13 +32,14 @@ Bir şarkıyı silmek dosyalarını silmez; dosyalar klasörde kalır.
 - Bir giriş kutusuna yazarken Space kayıt başlatmaz.
 - Arka plan parçası varsa önce metronom ön sayımı çalar, sonra parça başlar; parça bitince kayıt 2 saniye sonra kendiliğinden durur.
 - Metronom sesi kayda girmez; arka plan parçası girer.
+- Kayıt sırasında uygulamayı ikinci bir sekmede/pencerede açma: ikinci pencere devam eden kaydı yarım kayıt sanıp kurtarmaya çalışır.
 - Sekmeyi kayıt sırasında kapatırsan, uygulamayı tekrar açtığında "yarım kayıt kurtarıldı" mesajı çıkar ve dosya kurtarılır.
 
 ## Voicemeeter ipucu
 
 - Mikrofon olarak **Voicemeeter Out B1** seç.
 - Metronom çıkışını M-Audio kulaklığa ver.
-- Bu çıkış seçilemiyorsa tarayıcı sesini yalnızca **A1**'e yönlendir, **B**'ye yönlendirme (yoksa metronom/parça kayda çifte girer).
+- Bu çıkış seçilemiyorsa tarayıcı sesini yalnızca **A1**'e yönlendir (kulaklık). **B**'ye yönlendirme: tarayıcı sesi bir B hattına giderse metronom kayda girer ve arka plan parçası ikinci kez, gecikmeli olarak karışır.
 
 ## Gecikme telafisi
 

@@ -137,6 +137,8 @@ export function startTake(o: TakeOptions, deps: EngineDeps = {}): Take {
   }
 
   const onStop = async () => {
+    // Recorder stopped by itself (e.g. device lost): move the machine along first.
+    if (state === 'recording') go('STOP')
     await writes
     if (settled) return
     try {

@@ -48,7 +48,7 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
     }
   }, [root, songs, lib.status, countsVersion])
   if (lib.status === 'loading') return <main className="screen"><p>Yükleniyor…</p></main>
-  if (lib.status === 'broken') return <BrokenLibrary error={lib.error} onReset={() => void lib.resetBroken()} />
+  if (lib.status === 'broken') return <BrokenLibrary error={lib.error} onReset={lib.resetBroken} />
   const selected = selectedSongId ? songs.find((s) => s.id === selectedSongId) : undefined
   // SongList stays mounted (hidden) so its tab and search survive opening a song.
   const latencyMs = lib.library.settings.latencyCompensationMs

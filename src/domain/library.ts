@@ -21,9 +21,14 @@ export function parseLibrary(
   if (!isObject(raw)) return { ok: false, error: 'mymusic.json beklenen biçimde değil.' }
   if (raw.songs !== undefined && !Array.isArray(raw.songs))
     return { ok: false, error: 'mymusic.json: şarkı listesi geçersiz.' }
-  const songs = ((raw.songs ?? []) as unknown[]).map((s) =>
-    isObject(s) ? ({ ...s, countInBeats: typeof s.countInBeats === 'number' ? s.countInBeats : 4 } as Song) : null,
-  )
+  const songs = ((raw.songs ?? []) as unknown[]).map((s) => {
+    if (!isObject(s)) return null
+    const song: Record<string, unknown> = { ...s, countInBeats: s.countInBeats === undefined ? 4 : s.countInBeats }
+    const ok =
+      typeof song.id === 'string' && typeof song.title === 'string' && typeof song.folderName === 'string' &&
+      typeof song.bpm === 'number' && typeof song.countInBeats === 'number'
+    return ok ? (song as unknown as Song) : null
+  })
   if (songs.some((s) => s === null)) return { ok: false, error: 'mymusic.json: şarkı kaydı geçersiz.' }
   const settings = isObject(raw.settings) ? raw.settings : {}
   return {

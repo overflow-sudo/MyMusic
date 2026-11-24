@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSong, emptyLibrary, serializeLibrary, updateSong } from '../domain/library'
 import type { Song } from '../domain/types'
@@ -175,5 +175,27 @@ describe('SongDetail', () => {
       <SongDetail song={base} root={root} onBack={() => {}} patchSong={async () => {}} deleteSong={async () => {}} recorder={<div>REC</div>} />,
     )
     expect(await screen.findByText('REC')).toBeInTheDocument()
+  })
+
+  it('editing keeps the recorder mounted so a take is not stopped', async () => {
+    let mounts = 0
+    function Probe() {
+      useEffect(() => {
+        mounts++
+        return () => {
+          mounts--
+        }
+      }, [])
+      return <div>REC</div>
+    }
+    const root = createMemoryDir()
+    render(<SongDetail song={base} root={root} onBack={() => {}} patchSong={async () => {}} deleteSong={async () => {}} recorder={<Probe />} />)
+    expect(mounts).toBe(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Düzenle' }))
+    expect(screen.getByText('Şarkıyı düzenle')).toBeInTheDocument()
+    expect(mounts).toBe(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Vazgeç' }))
+    expect(mounts).toBe(1)
+    expect(screen.getByText('REC')).toBeVisible()
   })
 })

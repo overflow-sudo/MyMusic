@@ -35,6 +35,26 @@ describe('parseLibrary', () => {
   })
 })
 
+describe('parseLibrary corrupt songs', () => {
+  const good = () => ({ ...createSong(input, now, 'abcd-1') }) as Record<string, unknown>
+  const parse = (s: Record<string, unknown>) => parseLibrary(JSON.stringify({ version: 1, songs: [s] }))
+  it.each([
+    ['id', (s: Record<string, unknown>) => delete s.id],
+    ['title', (s: Record<string, unknown>) => delete s.title],
+    ['folderName', (s: Record<string, unknown>) => delete s.folderName],
+    ['bpm', (s: Record<string, unknown>) => delete s.bpm],
+    ['bpm string', (s: Record<string, unknown>) => (s.bpm = '90')],
+    ['countInBeats string', (s: Record<string, unknown>) => (s.countInBeats = 'x')],
+  ])('song without valid %s is corrupt', (_n, mutate) => {
+    const s = good()
+    mutate(s)
+    expect(parse(s).ok).toBe(false)
+  })
+  it('a well-formed song is accepted', () => {
+    expect(parse(good()).ok).toBe(true)
+  })
+})
+
 describe('serializeLibrary', () => {
   it('uses 2-space indent and trailing newline', () => {
     const t = serializeLibrary(emptyLibrary())

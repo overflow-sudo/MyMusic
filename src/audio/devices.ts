@@ -37,3 +37,12 @@ export function suggestedOutput(outs: MediaDeviceInfo[]): string {
   if (saved !== undefined && saved !== 'default' && saved !== 'communications') return saved
   return outs.find((d) => !isPseudo(d) && /m-audio/i.test(d.label))?.deviceId ?? ''
 }
+
+/** The output a take will actually use: saved, else suggested. '' = system default. */
+export async function resolveOutputDevice(): Promise<string> {
+  try {
+    return suggestedOutput((await listDevices()).outs)
+  } catch {
+    return suggestedOutput([])
+  }
+}

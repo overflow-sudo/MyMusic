@@ -80,26 +80,25 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
     }
   }
 
-  if (editing) {
-    return (
-      <main className="screen">
-        <h1>Şarkıyı düzenle</h1>
-        <SongForm
-          initial={song}
-          onCancel={() => setEditing(false)}
-          onSubmit={async (input: SongInput) => {
-            await patchSong(song.id, { ...input })
-            setBpm(String(input.bpm))
-            setBeats(String(input.countInBeats))
-            setEditing(false)
-          }}
-        />
-      </main>
-    )
-  }
-
   return (
     <main className="screen song-detail">
+      {editing && (
+        <>
+          <h1>Şarkıyı düzenle</h1>
+          <SongForm
+            initial={song}
+            onCancel={() => setEditing(false)}
+            onSubmit={async (input: SongInput) => {
+              await patchSong(song.id, { ...input })
+              setBpm(String(input.bpm))
+              setBeats(String(input.countInBeats))
+              setEditing(false)
+            }}
+          />
+        </>
+      )}
+      {/* Hidden while editing (not unmounted) so a running take is not stopped. */}
+      <div hidden={editing}>
       <button onClick={onBack}>‹ Geri</button>
       <h1>{song.artist ? `${song.title} — ${song.artist}` : song.title}</h1>
       <div className="row">
@@ -140,6 +139,7 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
       {recorder && <div className="recorder-slot">{recorder}</div>}
       <h2>Kayıtlar</h2>
       <RecordingList key={recordingsVersion} root={root} song={song} />
+      </div>
     </main>
   )
 }

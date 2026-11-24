@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, renderHook, waitFor } from '@testing-library/react'
 import { act } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
+import type { FsDir } from '../storage/fsDir'
 import { createMemoryDir } from '../storage/memoryDir'
 import { loadLibrary } from '../storage/repo'
 import { useLibrary } from './useLibrary'
@@ -67,5 +68,56 @@ describe('useLibrary', () => {
     await act(() => result.current.deleteSong(song.id))
     const r2 = await loadLibrary(root)
     expect(r2.ok && r2.library.songs).toEqual([])
+  })
+
+  function flaky(root: FsDir) {
+    const state = { fail: false }
+    const wrapped: FsDir = {
+      ...root,
+      writeFile: async (name, data) => {
+        if (state.fail && name === 'mymusic.json') throw new Error('disk')
+        return root.writeFile(name, data)
+      },
+    }
+    return { wrapped, state }
+  }
+
+  it('failed addSong leaves no song; retry yields exactly one on disk and in state', async () => {
+    const mem = createMemoryDir()
+    const { wrapped, state } = flaky(mem)
+    const { result } = renderHook(() => useLibrary(wrapped))
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    state.fail = true
+    await act(async () => {
+      await expect(result.current.addSong(input)).rejects.toThrow('disk')
+    })
+    expect(result.current.library.songs).toHaveLength(0)
+    state.fail = false
+    await act(async () => {
+      await result.current.addSong(input)
+    })
+    expect(result.current.library.songs).toHaveLength(1)
+    const r = await loadLibrary(mem)
+    expect(r.ok && r.library.songs).toHaveLength(1)
+  })
+
+  it('failed patchSong reverts state to the previous value', async () => {
+    const mem = createMemoryDir()
+    const { wrapped, state } = flaky(mem)
+    const { result } = renderHook(() => useLibrary(wrapped))
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    let song!: Awaited<ReturnType<typeof result.current.addSong>>
+    await act(async () => {
+      song = await result.current.addSong(input)
+    })
+    state.fail = true
+    await act(async () => {
+      await expect(result.current.patchSong(song.id, { bpm: 150 })).rejects.toThrow('disk')
+    })
+    expect(result.current.library.songs[0].bpm).toBe(87)
+    state.fail = false
+    await act(() => result.current.setSettings({ latencyCompensationMs: 10 }))
+    const r = await loadLibrary(mem)
+    expect(r.ok && r.library.songs[0].bpm).toBe(87)
   })
 })

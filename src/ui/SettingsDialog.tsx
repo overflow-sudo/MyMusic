@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { savedDevice } from '../audio/devices'
+import { resolveOutputDevice } from '../audio/devices'
 import { measureAutoLatencyMs } from '../audio/latency'
 
 interface Props {
@@ -11,7 +11,7 @@ interface Props {
   measureAuto?: () => Promise<number | null>
 }
 
-const defaultMeasure = () => measureAutoLatencyMs(savedDevice('out'))
+const defaultMeasure = async () => measureAutoLatencyMs(await resolveOutputDevice())
 
 export default function SettingsDialog({ value, onSave, onClose, measureAuto = defaultMeasure }: Props) {
   const [text, setText] = useState(value === null ? '' : String(value))

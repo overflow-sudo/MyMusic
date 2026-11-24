@@ -11,6 +11,7 @@ export function useLibrary(root: FsDir) {
   const [library, setLibraryState] = useState<Library>(emptyLibrary)
   const [error, setError] = useState<string | undefined>()
   const current = useRef<Library>(library)
+  const lastSaved = useRef<Library>(library)
   const queue = useRef<Promise<unknown>>(Promise.resolve())
 
   useEffect(() => {
@@ -20,6 +21,7 @@ export function useLibrary(root: FsDir) {
         if (cancelled) return
         if (r.ok) {
           current.current = r.library
+          lastSaved.current = r.library
           setLibraryState(r.library)
           setError(undefined)
           setStatus('ready')
@@ -44,7 +46,19 @@ export function useLibrary(root: FsDir) {
     (next: Library): Promise<void> => {
       current.current = next
       setLibraryState(next)
-      const run = queue.current.then(() => saveLibrary(root, next))
+      const run = queue.current.then(async () => {
+        try {
+          await saveLibrary(root, next)
+          lastSaved.current = next
+        } catch (e) {
+          // Roll back only if no newer commit has replaced this one meanwhile.
+          if (current.current === next) {
+            current.current = lastSaved.current
+            setLibraryState(lastSaved.current)
+          }
+          throw e
+        }
+      })
       queue.current = run.catch(() => undefined)
       return run
     },

@@ -114,6 +114,6 @@ describe('App shell', () => {
     vi.mocked(fh.ensurePermission).mockResolvedValue(true)
     render(<App />)
     expect(await screen.findByText('2 yarım kayıt kurtarıldı')).toBeInTheDocument()
-    expect(screen.getByText('Henüz şarkı yok. + Şarkı ekle ile başla.')).toBeInTheDocument()
+    expect(await screen.findByText('Henüz şarkı yok. + Şarkı ekle ile başla.')).toBeInTheDocument()
   })
 })

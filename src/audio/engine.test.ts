@@ -122,6 +122,21 @@ describe('startTake', () => {
     expect(await root.list()).toEqual([])
   })
 
+  it('a recorder that stops on its own (device lost) still finalizes and saves the file', async () => {
+    const { take, root, states, rec } = setup()
+    await vi.advanceTimersByTimeAsync(1950)
+    expect(states).toEqual(['countingIn', 'recording'])
+    const r = rec()
+    r.emit('a')
+    r.emit('b')
+    r.state = 'inactive'
+    r.onstop?.()
+    await expect(take.done).resolves.toBe('2026-11-24_21-30-05_ses.webm')
+    expect(states).toEqual(['countingIn', 'recording', 'finalizing', 'idle'])
+    const file = await (await song_dir(root))!.readFile('2026-11-24_21-30-05_ses.webm')
+    expect(await file!.text()).toBe('ab')
+  })
+
   it('counts down once per click', async () => {
     const { countdown } = setup()
     await vi.advanceTimersByTimeAsync(1700)
