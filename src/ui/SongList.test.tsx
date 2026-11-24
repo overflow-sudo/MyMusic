@@ -104,4 +104,15 @@ describe('SongList', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Vazgeç' }))
     expect(screen.queryByLabelText('Şarkı adı')).toBeNull()
   })
+
+  it('failed save shows a message and keeps the form with its input', async () => {
+    const onAdd = vi.fn().mockRejectedValue(new Error('disk'))
+    render(<SongList library={base} onOpen={() => {}} onAdd={onAdd} recordingCounts={{}} />)
+    fireEvent.click(screen.getByRole('button', { name: '+ Şarkı ekle' }))
+    fireEvent.change(screen.getByLabelText('Şarkı adı'), { target: { value: 'Yeni' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
+    expect(await screen.findByText('Kaydedilemedi, tekrar dene.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Şarkı adı')).toHaveValue('Yeni')
+    expect(onAdd).toHaveBeenCalledTimes(1)
+  })
 })

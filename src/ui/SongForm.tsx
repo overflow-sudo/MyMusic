@@ -27,6 +27,7 @@ export default function SongForm({ initial, onSubmit, onCancel }: Props) {
   const [beats, setBeats] = useState(String(initial?.countInBeats ?? 4))
   const [errors, setErrors] = useState<ReturnType<typeof validateSongInput>>({})
   const [busy, setBusy] = useState(false)
+  const [saveError, setSaveError] = useState(false)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -36,8 +37,11 @@ export default function SongForm({ initial, onSubmit, onCancel }: Props) {
     setErrors(found)
     if (Object.keys(found).length > 0) return
     setBusy(true)
+    setSaveError(false)
     try {
       await onSubmit(input)
+    } catch {
+      setSaveError(true)
     } finally {
       setBusy(false)
     }
@@ -71,6 +75,7 @@ export default function SongForm({ initial, onSubmit, onCancel }: Props) {
         <input inputMode="numeric" value={beats} onChange={(e) => setBeats(e.target.value)} />
       </label>
       {errors.countInBeats && <p className="note" role="alert">{errors.countInBeats}</p>}
+      {saveError && <p className="note" role="alert">Kaydedilemedi, tekrar dene.</p>}
       <div className="row">
         <button type="submit" disabled={busy}>Kaydet</button>
         <button type="button" onClick={onCancel}>Vazgeç</button>

@@ -38,7 +38,7 @@ export default function SongList({ library, onOpen, onAdd, recordingCounts }: Pr
     const q = query.trim()
     return library.songs
       .filter((s) => s.status === tab)
-      .filter((s) => !q || matches(`${s.title} ${s.artist}`, q))
+      .filter((s) => !q || matches(s.title, q) || matches(s.artist, q))
       .sort((a, b) => a.title.localeCompare(b.title, 'tr'))
   }, [library.songs, tab, query])
 
