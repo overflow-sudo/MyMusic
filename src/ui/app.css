@@ -186,11 +186,86 @@ label.button {
 h1 + .form { margin-top: 16px; }
 .form .actions { margin-top: 10px; }
 
-/* ---------- Song screen (restyled in later tasks; sensible defaults) ---------- */
-.song-detail h1 { margin-top: 8px; }
-.song-detail h2 { margin-top: 16px; }
-.song-detail label, .track-panel label, .device-selectors label, .modal label { max-width: 420px; }
-.track-panel { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+/* ---------- Song screen ---------- */
+.song-detail { max-width: 960px; gap: 32px; }
+.song-page { display: contents; }
+.song-detail label, .device-selectors label, .modal label { max-width: 420px; }
+.song-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: start; gap: 4px 20px; }
+.song-head .back { font-size: 30px; line-height: 1; margin-left: -10px; margin-top: 4px; }
+.song-head-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding-top: 2px; }
+.song-head-title { font-size: clamp(34px, 6vw, 56px); overflow-wrap: break-word; }
+.song-head-meta { font-size: 12px; letter-spacing: 0.14em; color: var(--dim); overflow-wrap: anywhere; }
+.song-head-file { letter-spacing: 0.04em; }
+.song-head-tempo { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-variant-numeric: tabular-nums; }
+.song-head-bpm { font-family: var(--font-display); font-weight: 300; font-size: clamp(44px, 7vw, 72px); line-height: 0.9; letter-spacing: -0.02em; }
+.song-head-unit { font-size: 12px; letter-spacing: 0.14em; color: var(--dim); white-space: nowrap; }
+.song-head .gear { margin-top: 4px; margin-right: -8px; font-size: 20px; }
+.recorder-slot { display: flex; flex-direction: column; }
+.song-recordings { display: flex; flex-direction: column; gap: 8px; }
+.song-recordings h2 { font-size: 13px; font-family: var(--font-body); font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+
+/* ---------- Settings drawer ---------- */
+.drawer-root { position: fixed; inset: 0; z-index: 25; pointer-events: none; visibility: hidden; transition: visibility 0s linear 240ms; }
+.drawer-root.open { pointer-events: auto; visibility: visible; transition: none; }
+.drawer-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.5); opacity: 0; transition: opacity 240ms ease; }
+.drawer-root.open .drawer-backdrop { opacity: 1; }
+.drawer {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 380px; max-width: 100%;
+  background: var(--panel); border-left: 1px solid var(--line);
+  display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain;
+  transform: translateX(100%); transition: transform 240ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.drawer:focus { outline: none; }
+.drawer-root.open .drawer { transform: none; }
+.drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 20px 4px 24px; }
+.drawer-title { font-size: 22px; }
+.drawer-head .icon-btn { margin-right: -8px; font-size: 16px; }
+.drawer-body { padding: 8px 24px 32px; display: flex; flex-direction: column; gap: 24px; }
+.drawer-sections { display: flex; flex-direction: column; }
+.drawer-sections[hidden] { display: none; }
+.drawer-section { display: flex; flex-direction: column; gap: 12px; padding: 18px 0; border-bottom: 1px solid var(--line); }
+.drawer-label { font-family: var(--font-body); font-weight: 500; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
+.drawer-number { display: flex; align-items: baseline; gap: 10px; }
+.drawer-number input { width: 4.5ch !important; font-family: var(--font-display); font-weight: 300; font-size: 28px; padding: 2px 0; font-variant-numeric: tabular-nums; }
+.drawer-number .dim { font-size: 13px; }
+.drawer-section .seg { align-self: flex-start; }
+.seg-wrap { flex-wrap: wrap; border-radius: 22px; }
+.drawer-actions { flex-direction: row; align-items: center; justify-content: space-between; border-bottom: 0; padding-top: 24px; }
+button.danger-link { background: none; border: 0; color: var(--rec); padding: 8px 4px; min-height: 0; }
+button.danger-link:hover { color: #f0574e; text-decoration: underline; text-underline-offset: 3px; }
+.drawer .song-form label { max-width: none; }
+#device-settings:empty { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .drawer, .drawer-backdrop, .drawer-root { transition: none; }
+}
+@media (max-width: 520px) {
+  .drawer { width: 100%; border-left: 0; }
+  .song-detail { gap: 24px; }
+  .song-head { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'back gear' 'main main' 'tempo tempo'; gap: 12px; }
+  .song-head .back { grid-area: back; justify-self: start; }
+  .song-head .gear { grid-area: gear; }
+  .song-head-main { grid-area: main; }
+  .song-head-tempo { grid-area: tempo; flex-direction: row; align-items: baseline; gap: 12px; }
+  .song-head-bpm { font-size: 48px; }
+}
+
+/* ---------- Track panel (inside the drawer) ---------- */
+.track-panel { display: flex; flex-direction: column; gap: 14px; align-items: stretch; }
+.track-panel > .btn { align-self: flex-start; }
+.track-file { display: flex; flex-direction: column; gap: 10px; }
+.track-name { font-size: 14px; overflow-wrap: anywhere; }
+.track-panel .player { padding-bottom: 0; }
+.track-panel .player-row { row-gap: 8px; }
+.track-panel .player-seek { flex-basis: 100%; order: 10; margin: 0; }
+.track-panel .start-here { margin-left: auto; padding: 6px 14px; min-height: 34px; font-size: 13px; }
+.track-fields { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 20px; align-items: end; }
+.track-volume-n { color: var(--fg); font-variant-numeric: tabular-nums; margin-left: 6px; }
+.track-volume input[type='range'] { appearance: none; background: transparent; height: 38px; cursor: pointer; }
+.track-volume input[type='range']::-webkit-slider-runnable-track { height: 2px; border-radius: 999px; background: var(--line); }
+.track-volume input[type='range']::-moz-range-track { height: 2px; border-radius: 999px; background: var(--line); }
+.track-volume input[type='range']::-moz-range-progress { height: 2px; border-radius: 999px; background: var(--fg); }
+.track-volume input[type='range']::-webkit-slider-thumb { appearance: none; width: 12px; height: 12px; margin-top: -5px; border-radius: 50%; background: var(--fg); border: 0; }
+.track-volume input[type='range']::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--fg); border: 0; }
 .recorder { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
 .device-selectors { display: flex; flex-direction: column; gap: 12px; align-self: stretch; }
 .recordings { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; }

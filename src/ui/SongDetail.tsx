@@ -1,8 +1,10 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { validateSongInput } from '../domain/validate'
 import type { Song, SongStatus, Track } from '../domain/types'
+import { getLightMode, onLightModeChange, setLightMode, type LightMode } from '../light/lightPrefs'
 import type { FsDir } from '../storage/fsDir'
-import { importTrack, removeTrack } from '../storage/repo'
+import { importTrack, readTrack, removeTrack } from '../storage/repo'
+import Drawer from './Drawer'
 import RecordingList from './RecordingList'
 import SongForm, { type SongInput } from './SongForm'
 import TrackPanel from './TrackPanel'
@@ -13,18 +15,43 @@ interface Props {
   onBack: () => void
   patchSong: (id: string, patch: Partial<Song>) => Promise<void>
   deleteSong: (id: string) => Promise<void>
-  /** Slot where the recorder is mounted (Task 8). */
+  /** Slot where the recorder is mounted; shown in the stage area. */
   recorder?: ReactNode
+  /** Extra content for the drawer's device section (the Recorder portals into #device-settings). */
+  drawerSlot?: ReactNode
   /** Bumped by the parent when a take was saved, so the list reloads. */
   recordingsVersion?: number
 }
 
-export default function SongDetail({ song, root, onBack, patchSong, deleteSong, recorder, recordingsVersion = 0 }: Props) {
+const STATUS: { value: SongStatus; label: string }[] = [
+  { value: 'learning', label: 'Çalıştığım' },
+  { value: 'known', label: 'Bildiğim' },
+]
+const LIGHT: { value: LightMode; label: string }[] = [
+  { value: 'a', label: 'A · Alttan parıltı' },
+  { value: 'c', label: 'C · Tüm ekran' },
+  { value: 'off', label: 'Kapalı' },
+]
+// Status words are Turkish (ı → I, i → İ); artist names are often not ("Oasis" must not become "OASİS").
+const upperTr = (s: string) => s.toLocaleUpperCase('tr-TR')
+
+export default function SongDetail({ song, root, onBack, patchSong, deleteSong, recorder, drawerSlot, recordingsVersion = 0 }: Props) {
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [saveError, setSaveError] = useState(false)
   const [bpm, setBpm] = useState(String(song.bpm))
   const [beats, setBeats] = useState(String(song.countInBeats))
   const [errors, setErrors] = useState<{ bpm?: string; countInBeats?: string }>({})
+  const [trackVersion, setTrackVersion] = useState(0)
+  const [light, setLight] = useState<LightMode>(getLightMode)
+  useEffect(() => onLightModeChange(setLight), [])
+  const editButton = useRef<HTMLButtonElement>(null)
+  const wasEditing = useRef(false)
+  // Leaving the form puts focus back on Düzenle instead of dropping it to the page.
+  useEffect(() => {
+    if (wasEditing.current && !editing && drawerOpen) editButton.current?.focus()
+    wasEditing.current = editing
+  }, [editing, drawerOpen])
 
   // Every save funnels through here so a rejected write shows one message instead of an unhandled rejection.
   const save = async (patch: Partial<Song>): Promise<boolean> => {
@@ -56,6 +83,7 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
     try {
       const track = await importTrack(root, song, file)
       await patchSong(song.id, { track })
+      setTrackVersion((v) => v + 1)
     } catch {
       setSaveError(true)
     }
@@ -80,11 +108,54 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
     }
   }
 
+  const statusLabel = STATUS.find((s) => s.value === song.status)?.label ?? ''
+  const meta = [song.artist.toUpperCase(), upperTr(statusLabel)].filter(Boolean).join(' · ')
+
   return (
     <main className="screen song-detail">
-      {editing && (
-        <>
-          <h1>Şarkıyı düzenle</h1>
+      {/* The page behind the open drawer is inert, so focus stays in the drawer (display: contents keeps the layout). */}
+      <div className="song-page" inert={drawerOpen}>
+        <header className="song-head">
+          <button type="button" className="icon-btn back" aria-label="Geri" onClick={onBack}>
+            ‹
+          </button>
+          <div className="song-head-main">
+            <h1 className="song-head-title">{song.title}</h1>
+            <p className="song-head-meta">
+              {meta}
+              {song.track && (
+                <>
+                  {' · PARÇA: '}
+                  <span className="song-head-file">{song.track.fileName}</span>
+                </>
+              )}
+            </p>
+          </div>
+          <div className="song-head-tempo">
+            <span className="song-head-bpm">{song.bpm}</span>
+            <span className="song-head-unit">BPM · {song.countInBeats} VURUŞ</span>
+          </div>
+          <button
+            type="button"
+            className="icon-btn gear"
+            aria-label="Şarkı ayarları"
+            aria-expanded={drawerOpen}
+            onClick={() => setDrawerOpen(true)}
+          >
+            ⚙
+          </button>
+        </header>
+
+        {recorder && <div className="recorder-slot">{recorder}</div>}
+
+        <section className="song-recordings">
+          <h2>Kayıtlar</h2>
+          <RecordingList key={recordingsVersion} root={root} song={song} />
+        </section>
+      </div>
+
+      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title={editing ? 'Şarkıyı düzenle' : 'Şarkı ayarları'}>
+        {editing && (
           <SongForm
             initial={song}
             onCancel={() => setEditing(false)}
@@ -95,51 +166,95 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
               setEditing(false)
             }}
           />
-        </>
-      )}
-      {/* Hidden while editing (not unmounted) so a running take is not stopped. */}
-      <div hidden={editing}>
-      <button onClick={onBack}>‹ Geri</button>
-      <h1>{song.artist ? `${song.title} — ${song.artist}` : song.title}</h1>
-      <div className="row">
-        <label>
-          Durum
-          <select value={song.status} onChange={(e) => void save({ status: e.target.value as SongStatus })}>
-            <option value="known">Bildiğim</option>
-            <option value="learning">Çalıştığım</option>
-          </select>
-        </label>
-        <button onClick={() => setEditing(true)}>Düzenle</button>
-        <button onClick={() => void doDelete()}>Sil</button>
-      </div>
-      <div className="row">
-        <label>
-          Tempo (BPM)
-          <input
-            inputMode="numeric"
-            value={bpm}
-            onChange={(e) => setBpm(e.target.value)}
-            onBlur={() => commitNumber('bpm', bpm, setBpm)}
-          />
-        </label>
-        <label>
-          Sayım (vuruş)
-          <input
-            inputMode="numeric"
-            value={beats}
-            onChange={(e) => setBeats(e.target.value)}
-            onBlur={() => commitNumber('countInBeats', beats, setBeats)}
-          />
-        </label>
-      </div>
-      {errors.bpm && <p className="note" role="alert">{errors.bpm}</p>}
-      {errors.countInBeats && <p className="note" role="alert">{errors.countInBeats}</p>}
-      {saveError && <p className="note" role="alert">Kaydedilemedi, tekrar dene.</p>}
-      <TrackPanel track={song.track} onImport={doImport} onRemove={doRemove} onChange={changeTrack} />
-      {recorder && <div className="recorder-slot">{recorder}</div>}
-      <h2>Kayıtlar</h2>
-      <RecordingList key={recordingsVersion} root={root} song={song} />
-      </div>
+        )}
+        {/* Hidden while editing (not unmounted) so the track preview and device section keep their state. */}
+        <div className="drawer-sections" hidden={editing}>
+          {saveError && (
+            <p className="note" role="alert">
+              Kaydedilemedi, tekrar dene.
+            </p>
+          )}
+          <section className="drawer-section">
+            <h3 className="drawer-label">Durum</h3>
+            <div className="seg" role="group" aria-label="Durum">
+              {STATUS.map((s) => (
+                <button key={s.value} type="button" aria-pressed={song.status === s.value} onClick={() => song.status !== s.value && void save({ status: s.value })}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </section>
+          <section className="drawer-section">
+            <h3 className="drawer-label">Tempo</h3>
+            <div className="drawer-number">
+              <input
+                aria-label="Tempo (BPM)"
+                inputMode="numeric"
+                value={bpm}
+                onChange={(e) => setBpm(e.target.value)}
+                onBlur={() => commitNumber('bpm', bpm, setBpm)}
+              />
+              <span className="dim">BPM</span>
+            </div>
+            {errors.bpm && (
+              <p className="note" role="alert">
+                {errors.bpm}
+              </p>
+            )}
+          </section>
+          <section className="drawer-section">
+            <h3 className="drawer-label">Sayım</h3>
+            <div className="drawer-number">
+              <input
+                aria-label="Sayım (vuruş)"
+                inputMode="numeric"
+                value={beats}
+                onChange={(e) => setBeats(e.target.value)}
+                onBlur={() => commitNumber('countInBeats', beats, setBeats)}
+              />
+              <span className="dim">vuruş</span>
+            </div>
+            {errors.countInBeats && (
+              <p className="note" role="alert">
+                {errors.countInBeats}
+              </p>
+            )}
+          </section>
+          <section className="drawer-section">
+            <h3 className="drawer-label">Parça</h3>
+            <TrackPanel
+              track={song.track}
+              version={trackVersion}
+              onImport={doImport}
+              onRemove={doRemove}
+              onChange={changeTrack}
+              loadFile={() => readTrack(root, song)}
+            />
+          </section>
+          <section className="drawer-section">
+            <h3 className="drawer-label">Cihazlar</h3>
+            <div id="device-settings">{drawerSlot}</div>
+          </section>
+          <section className="drawer-section">
+            <h3 className="drawer-label">Işık</h3>
+            <div className="seg seg-wrap" role="group" aria-label="Işık">
+              {LIGHT.map((l) => (
+                <button key={l.value} type="button" aria-pressed={light === l.value} onClick={() => setLightMode(l.value)}>
+                  {l.label}
+                </button>
+              ))}
+            </div>
+          </section>
+          <section className="drawer-section drawer-actions">
+            <button ref={editButton} type="button" className="btn btn-ghost" onClick={() => setEditing(true)}>
+              Düzenle
+            </button>
+            <button type="button" className="danger-link" onClick={() => void doDelete()}>
+              Sil
+            </button>
+          </section>
+        </div>
+      </Drawer>
     </main>
   )
 }
