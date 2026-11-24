@@ -160,6 +160,28 @@ describe('Recorder', () => {
     expect(startTakeMock).not.toHaveBeenCalled()
   })
 
+  it('clicking the already selected mode retries the device after a denied permission', async () => {
+    getUserMedia.mockRejectedValueOnce(new DOMException('denied', 'NotAllowedError'))
+    renderRecorder(plain)
+    expect(await screen.findByText('Mikrofona erişim izni verilmedi.')).toBeInTheDocument()
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Ses' }))
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByText('Mikrofona erişim izni verilmedi.')).not.toBeInTheDocument())
+  })
+
+  it('hides the stage label during the count-in so it cannot overlap the number', async () => {
+    renderRecorder(plain)
+    await chooseAudio()
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
+    await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
+    expect(document.querySelector('.stage-label')).not.toBeNull()
+    act(() => lastOptions().onState('countingIn'))
+    expect(document.querySelector('.stage-label')).toBeNull()
+    act(() => lastOptions().onState('recording'))
+    expect(document.querySelector('.stage-label')).not.toBeNull()
+  })
+
   it('missing camera shows a Turkish message', async () => {
     renderRecorder(plain)
     await chooseAudio()

@@ -116,7 +116,7 @@ input:not([type='range']):not([type='file']):not([type='checkbox']):not([type='r
   outline-offset: 4px;
   transition: border-color 120ms;
 }
-input:not([type='range']):focus, select:focus, textarea:focus { border-bottom-color: var(--fg); outline: none; }
+input:not([type='range']):focus, select:focus, textarea:focus { border-bottom-color: var(--fg); }
 input::placeholder { color: var(--dim); opacity: 1; }
 input[type='search']::-webkit-search-cancel-button { filter: invert(0.6); }
 select {
@@ -357,6 +357,11 @@ button.danger-link:hover { color: #f0574e; text-decoration: underline; text-unde
   background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 14px;
   padding: 24px; display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 440px;
 }
+
+.modal h2 { font-family: var(--font-display); font-weight: 300; font-size: 24px; margin: 0; }
+.modal .row { display: flex; gap: 10px; justify-content: flex-end; }
+.modal-field { display: flex; flex-direction: column; gap: 8px; }
+.modal-field .seg { align-self: flex-start; }
 
 @media (max-width: 520px) {
   .screen { padding-top: 24px; }

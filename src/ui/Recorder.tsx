@@ -245,7 +245,7 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
     <section className="recorder">
       <div className={`stage rec-stage rec-stage-${mode}`}>
         {mode === 'video' && stream && <Preview stream={stream} />}
-        <span className="stage-label">{inputLabel(mode, stream)}</span>
+        {session !== 'countingIn' && <span className="stage-label">{inputLabel(mode, stream)}</span>}
         {session === 'recording' && <span className="stage-rec elapsed">● {formatTimecode(elapsed)}</span>}
         {session === 'countingIn' && <CountdownOverlay beatsLeft={beats} onCancel={() => take.current?.cancel()} />}
       </div>
@@ -265,10 +265,10 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
       )}
       <div className="rec-bar">
         <div className="seg rec-mode" role="group" aria-label="Kayıt türü">
-          <button type="button" aria-pressed={mode === 'ses'} disabled={busy} onClick={() => mode !== 'ses' && chooseMode('ses')}>
+          <button type="button" aria-pressed={mode === 'ses'} disabled={busy} onClick={() => (mode !== 'ses' || !stream) && chooseMode('ses')}>
             Ses
           </button>
-          <button type="button" aria-pressed={mode === 'video'} disabled={busy} onClick={() => mode !== 'video' && chooseMode('video')}>
+          <button type="button" aria-pressed={mode === 'video'} disabled={busy} onClick={() => (mode !== 'video' || !stream) && chooseMode('video')}>
             Video
           </button>
         </div>

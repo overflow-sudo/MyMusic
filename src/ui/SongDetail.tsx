@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { validateSongInput } from '../domain/validate'
 import type { Song, SongStatus, Track } from '../domain/types'
-import { getLightMode, onLightModeChange, setLightMode, type LightMode } from '../light/lightPrefs'
 import type { FsDir } from '../storage/fsDir'
 import { importTrack, readTrack, removeTrack } from '../storage/repo'
 import Drawer from './Drawer'
+import LightModeSegment from './LightModeSegment'
 import RecordingList from './RecordingList'
 import SongForm, { type SongInput } from './SongForm'
 import TrackPanel from './TrackPanel'
@@ -27,11 +27,6 @@ const STATUS: { value: SongStatus; label: string }[] = [
   { value: 'learning', label: 'Çalıştığım' },
   { value: 'known', label: 'Bildiğim' },
 ]
-const LIGHT: { value: LightMode; label: string }[] = [
-  { value: 'a', label: 'A · Alttan parıltı' },
-  { value: 'c', label: 'C · Tüm ekran' },
-  { value: 'off', label: 'Kapalı' },
-]
 // Status words are Turkish (ı → I, i → İ); artist names are often not ("Oasis" must not become "OASİS").
 const upperTr = (s: string) => s.toLocaleUpperCase('tr-TR')
 
@@ -43,8 +38,6 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
   const [beats, setBeats] = useState(String(song.countInBeats))
   const [errors, setErrors] = useState<{ bpm?: string; countInBeats?: string }>({})
   const [trackVersion, setTrackVersion] = useState(0)
-  const [light, setLight] = useState<LightMode>(getLightMode)
-  useEffect(() => onLightModeChange(setLight), [])
   const editButton = useRef<HTMLButtonElement>(null)
   const wasEditing = useRef(false)
   // Leaving the form puts focus back on Düzenle instead of dropping it to the page.
@@ -237,13 +230,7 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
           </section>
           <section className="drawer-section">
             <h3 className="drawer-label">Işık</h3>
-            <div className="seg seg-wrap" role="group" aria-label="Işık">
-              {LIGHT.map((l) => (
-                <button key={l.value} type="button" aria-pressed={light === l.value} onClick={() => setLightMode(l.value)}>
-                  {l.label}
-                </button>
-              ))}
-            </div>
+            <LightModeSegment />
           </section>
           <section className="drawer-section drawer-actions">
             <button ref={editButton} type="button" className="btn btn-ghost" onClick={() => setEditing(true)}>

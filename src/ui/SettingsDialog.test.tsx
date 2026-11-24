@@ -1,9 +1,14 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { getLightMode, setLightMode } from '../light/lightPrefs'
 import SettingsDialog from './SettingsDialog'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  localStorage.clear()
+  setLightMode('a')
+})
 
 function setup(value: number | null) {
   const onSave = vi.fn(async () => {})
@@ -33,5 +38,27 @@ describe('SettingsDialog', () => {
     fireEvent.change(input, { target: { value: '60' } })
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     await waitFor(() => expect(onSave).toHaveBeenCalledWith(60))
+  })
+
+  it('Işık segment: choosing C stores the mode; the current one is pressed', () => {
+    setLightMode('off')
+    setup(null)
+    const group = screen.getByRole('group', { name: 'Işık' })
+    expect(within(group).getByRole('button', { name: 'Kapalı' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(within(group).getByRole('button', { name: /^C/ }))
+    expect(getLightMode()).toBe('c')
+    expect(within(group).getByRole('button', { name: /^C/ })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('Esc closes the dialog and focus starts inside it', () => {
+    const { onClose } = setup(null)
+    expect(screen.getByRole('dialog', { name: 'Ayarlar' }).contains(document.activeElement)).toBe(true)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('Kaydet is the primary button', () => {
+    setup(null)
+    expect(screen.getByRole('button', { name: 'Kaydet' })).toHaveClass('btn', 'btn-primary')
   })
 })
