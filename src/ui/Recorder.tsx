@@ -3,7 +3,7 @@ import { audioConstraints, videoConstraints } from '../audio/constraints'
 import { listDevices, saveDevice, savedDevice, suggestedOutput, type DeviceKind } from '../audio/devices'
 import { decodeTrack, startTake, type Take, type TakeOptions } from '../audio/engine'
 import type { SessionState } from '../audio/sessionMachine'
-import { shortcutAction } from '../audio/shortcuts'
+import { isTypingTarget, shortcutAction } from '../audio/shortcuts'
 import { formatTimecode } from '../domain/time'
 import type { RecordingKind, Song } from '../domain/types'
 import type { FsDir } from '../storage/fsDir'
@@ -19,6 +19,8 @@ interface Props {
   latencyMs: number | null
   /** A take was written to disk. */
   onSaved(): void
+  /** false while another modal (settings) is open. */
+  shortcutsEnabled?: boolean
 }
 
 const TRACK_MISSING = 'Parça dosyası bulunamadı, parçasız kaydediliyor.'
@@ -51,7 +53,7 @@ function openStream(kind: RecordingKind, mic: string, cam: string) {
 
 const stopStream = (s: MediaStream | null) => s?.getTracks().forEach((t) => t.stop())
 
-export default function Recorder({ song, root, latencyMs, onSaved }: Props) {
+export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnabled = true }: Props) {
   const [mode, setMode] = useState<RecordingKind | null>(null)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [devices, setDevices] = useState<Devices>(noDevices)
@@ -63,6 +65,7 @@ export default function Recorder({ song, root, latencyMs, onSaved }: Props) {
   const [elapsed, setElapsed] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [notices, setNotices] = useState<string[]>([])
+  const [preparing, setPreparing] = useState(false)
 
   const mounted = useRef(true)
   const streamRef = useRef<MediaStream | null>(null)
@@ -152,6 +155,7 @@ export default function Recorder({ song, root, latencyMs, onSaved }: Props) {
     const st = sessionRef.current
     if (!mode || !input || take.current || starting.current || (st !== 'idle' && st !== 'error')) return
     starting.current = true
+    setPreparing(true)
     setError(null)
     setNotices([])
     setElapsed(0)
@@ -182,21 +186,26 @@ export default function Recorder({ song, root, latencyMs, onSaved }: Props) {
         })
     } finally {
       starting.current = false
+      if (mounted.current) setPreparing(false)
     }
   }
 
-  // Latest start() for the window listener, which is registered once.
+  // Latest start() / enabled flag for the window listener, which is registered once.
   const startRef = useRef(start)
+  const enabledRef = useRef(shortcutsEnabled)
   useEffect(() => {
     startRef.current = start
+    enabledRef.current = shortcutsEnabled
   })
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!enabledRef.current) return
       const target = e.target instanceof HTMLElement ? e.target : document.body
-      const typing = shortcutAction(' ', 'idle', target) === null
+      // Players, fields and other dialogs (settings) keep their own Space; only the countdown overlay is ours.
+      if (isTypingTarget(target) || target.closest('[role="dialog"]:not(.countdown)')) return
       // Space is the record key: never let it also "click" a focused button or scroll.
-      if (e.key === ' ' && !typing) e.preventDefault()
+      if (e.key === ' ') e.preventDefault()
       if (e.repeat) return
       const action = shortcutAction(e.key, sessionRef.current, target)
       if (!action) return
@@ -222,7 +231,7 @@ export default function Recorder({ song, root, latencyMs, onSaved }: Props) {
   }, [])
 
   const busy = session === 'countingIn' || session === 'recording' || session === 'finalizing'
-  const canStart = !!mode && !!stream && !busy
+  const canStart = !!mode && !!stream && !busy && !preparing
 
   return (
     <section className="recorder">
@@ -269,7 +278,7 @@ export default function Recorder({ song, root, latencyMs, onSaved }: Props) {
                   void start()
                 }}
               >
-                ● Kaydet
+                {preparing ? 'Hazırlanıyor…' : '● Kaydet'}
               </button>
             )}
             {session === 'recording' && <span className="elapsed">● {formatTimecode(elapsed)}</span>}

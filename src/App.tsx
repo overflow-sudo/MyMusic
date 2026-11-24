@@ -87,6 +87,7 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
               song={selected}
               root={root}
               latencyMs={latencyMs}
+              shortcutsEnabled={!settingsOpen}
               onSaved={() => setCountsVersion((v) => v + 1)}
             />
           }

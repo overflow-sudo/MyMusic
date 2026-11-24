@@ -1,12 +1,16 @@
 import type { SessionState } from './sessionMachine'
 
-export function shortcutAction(
-  key: string,
-  state: SessionState,
-  target: { tagName: string; isContentEditable?: boolean },
-): 'start' | 'stop' | 'cancel' | null {
-  const tag = target.tagName.toUpperCase()
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) return null
+type Target = { tagName: string; isContentEditable?: boolean }
+
+const OWN_KEYS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'AUDIO', 'VIDEO'])
+
+/** Elements that use Space themselves (typing, play/pause): shortcuts must leave them alone. */
+export function isTypingTarget(target: Target): boolean {
+  return OWN_KEYS.has(target.tagName.toUpperCase()) || !!target.isContentEditable
+}
+
+export function shortcutAction(key: string, state: SessionState, target: Target): 'start' | 'stop' | 'cancel' | null {
+  if (isTypingTarget(target)) return null
   if (key === ' ') {
     if (state === 'idle' || state === 'error') return 'start'
     if (state === 'recording') return 'stop'

@@ -55,8 +55,13 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-function renderRecorder(song: Song, root = createMemoryDir(), onSaved = vi.fn()) {
-  render(<Recorder song={song} root={root} latencyMs={null} onSaved={onSaved} />)
+function renderRecorder(song: Song, root = createMemoryDir(), onSaved = vi.fn(), extra: React.ReactNode = null) {
+  render(
+    <>
+      <Recorder song={song} root={root} latencyMs={null} onSaved={onSaved} />
+      {extra}
+    </>,
+  )
   return { root, onSaved }
 }
 
@@ -152,6 +157,55 @@ describe('Recorder', () => {
     const notPrevented = fireEvent.keyDown(document.body, { key: ' ' })
     expect(notPrevented).toBe(false)
     await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
+  })
+
+  it('Space on a focused audio/video player does not start a take and is left to the player', async () => {
+    renderRecorder(plain, undefined, undefined, (
+      <>
+        <audio controls data-testid="audio" />
+        <video controls data-testid="video" />
+      </>
+    ))
+    await chooseAudio()
+    for (const id of ['audio', 'video']) expect(fireEvent.keyDown(screen.getByTestId(id), { key: ' ' })).toBe(true)
+    await act(async () => {})
+    expect(startTakeMock).not.toHaveBeenCalled()
+  })
+
+  it('Space on a button inside another dialog does not start a take', async () => {
+    renderRecorder(plain, undefined, undefined, (
+      <div role="dialog" aria-label="Ayarlar">
+        <button>Vazgeç</button>
+      </div>
+    ))
+    await chooseAudio()
+    expect(fireEvent.keyDown(screen.getByRole('button', { name: 'Vazgeç' }), { key: ' ' })).toBe(true)
+    await act(async () => {})
+    expect(startTakeMock).not.toHaveBeenCalled()
+  })
+
+  it('shortcuts are off while disabled (settings open), even with focus on the body', async () => {
+    const root = createMemoryDir()
+    render(<Recorder song={plain} root={root} latencyMs={null} onSaved={() => {}} shortcutsEnabled={false} />)
+    await chooseAudio()
+    fireEvent.keyDown(document.body, { key: ' ' })
+    await act(async () => {})
+    expect(startTakeMock).not.toHaveBeenCalled()
+  })
+
+  it('Kaydet is disabled with "Hazırlanıyor…" while the track decodes', async () => {
+    const song = withTrack(0)
+    const root = createMemoryDir()
+    await (await songDir(root, song)).writeFile('track.mp3', 'mp3')
+    let finishDecode!: (b: AudioBuffer) => void
+    decodeMock.mockReturnValue(new Promise((r) => (finishDecode = r)))
+    renderRecorder(song, root)
+    await chooseAudio()
+    fireEvent.click(screen.getByRole('button', { name: '● Kaydet' }))
+    expect(await screen.findByRole('button', { name: 'Hazırlanıyor…' })).toBeDisabled()
+    expect(fireEvent.keyDown(document.body, { key: ' ' })).toBe(false)
+    await act(async () => finishDecode({ duration: 100 } as AudioBuffer))
+    expect(startTakeMock).toHaveBeenCalledTimes(1)
   })
 
   it('Space again during count-in does nothing, even with the button focused', async () => {

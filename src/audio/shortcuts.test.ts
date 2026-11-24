@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { shortcutAction } from './shortcuts'
+import { isTypingTarget, shortcutAction } from './shortcuts'
 
 const body = { tagName: 'BODY' }
 describe('shortcutAction', () => {
@@ -24,6 +24,15 @@ describe('shortcutAction', () => {
       expect(shortcutAction(' ', 'idle', { tagName })).toBeNull()
     expect(shortcutAction(' ', 'idle', { tagName: 'DIV', isContentEditable: true })).toBeNull()
     expect(shortcutAction('Escape', 'countingIn', { tagName: 'INPUT' })).toBeNull()
+  })
+  it('ignores media elements, which use Space for play/pause', () => {
+    for (const tagName of ['AUDIO', 'VIDEO', 'audio']) {
+      expect(isTypingTarget({ tagName })).toBe(true)
+      expect(shortcutAction(' ', 'idle', { tagName })).toBeNull()
+      expect(shortcutAction(' ', 'recording', { tagName })).toBeNull()
+    }
+    expect(isTypingTarget(body)).toBe(false)
+    expect(isTypingTarget({ tagName: 'BUTTON' })).toBe(false)
   })
   it('ignores other keys', () => {
     expect(shortcutAction('a', 'idle', body)).toBeNull()
