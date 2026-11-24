@@ -1,0 +1,8 @@
+:root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+body { margin: 0; }
+.screen { max-width: 36rem; margin: 4rem auto; padding: 0 1rem; display: flex; flex-direction: column; gap: 0.75rem; align-items: flex-start; }
+.muted { opacity: 0.7; }
+.note { padding: 0.5rem 0.75rem; border-left: 3px solid #d97706; background: rgba(217, 119, 6, 0.12); margin: 0; }
+button { font: inherit; padding: 0.5rem 1rem; cursor: pointer; }
+button.link { background: none; border: none; text-decoration: underline; padding: 0; }
+.toast { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); background: #222; color: #fff; padding: 0.6rem 1rem; border-radius: 6px; }
