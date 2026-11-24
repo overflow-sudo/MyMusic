@@ -16,12 +16,14 @@ export default function BrokenLibrary({ error, onReset }: Props) {
     }
   }
   return (
-    <main className="screen">
-      <h1>Şarkı listesi okunamadı</h1>
+    <main className="screen narrow hero">
+      <h1 className="display">Şarkı listesi okunamadı</h1>
       <p role="alert" className="note">{error ?? 'mymusic.json okunamadı.'}</p>
-      <p className="muted">Dosyaya dokunulmadı. İstersen mevcut dosyanın yedeğini alıp boş bir liste başlatabilirsin.</p>
+      <p className="dim">Dosyaya dokunulmadı. İstersen mevcut dosyanın yedeğini alıp boş bir liste başlatabilirsin.</p>
       {failed && <p role="alert" className="note">Yedekleme başarısız oldu, tekrar dene.</p>}
-      <button onClick={() => void reset()}>Yedekle ve yeni liste başlat</button>
+      <div className="actions">
+        <button className="btn btn-primary" onClick={() => void reset()}>Yedekle ve yeni liste başlat</button>
+      </div>
     </main>
   )
 }

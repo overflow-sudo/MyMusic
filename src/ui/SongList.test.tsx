@@ -32,11 +32,11 @@ function Harness({ initial = base, onOpen = () => {}, counts = {} }: { initial?:
 describe('SongList', () => {
   it('shows tab counts, default tab Çalıştığım', () => {
     render(<Harness />)
-    expect(screen.getByRole('tab', { name: 'Bildiğim (1)' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Çalıştığım (2)' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Bildiğim 1' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Çalıştığım 2' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByText(/Wonderwall/)).toBeInTheDocument()
     expect(screen.queryByText(/Hotel California/)).toBeNull()
-    fireEvent.click(screen.getByRole('tab', { name: 'Bildiğim (1)' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Bildiğim 1' }))
     expect(screen.getByText(/Hotel California/)).toBeInTheDocument()
   })
 
@@ -68,15 +68,28 @@ describe('SongList', () => {
     expect(onOpen).toHaveBeenCalledWith('id1')
   })
 
+  it('row shows title, dim artist and large bpm digits; header opens settings', () => {
+    const onSettings = vi.fn()
+    render(<SongList library={base} onOpen={() => {}} onAdd={() => {}} recordingCounts={{ id1: 3 }} onSettings={onSettings} />)
+    const row = screen.getByRole('button', { name: /Wonderwall/ })
+    expect(within(row).getByText('Wonderwall')).toHaveClass('song-title')
+    expect(within(row).getByText('Oasis')).toHaveClass('song-artist')
+    expect(within(row).getByText('100').tagName).toBe('EM')
+    expect(row).toHaveTextContent('100 BPM · 3 kayıt')
+    expect(screen.getByRole('searchbox')).toHaveAttribute('placeholder', 'Ara')
+    fireEvent.click(screen.getByRole('button', { name: 'Ayarlar' }))
+    expect(onSettings).toHaveBeenCalled()
+  })
+
   it('shows empty state', () => {
     render(<Harness initial={lib()} />)
-    expect(screen.getByText('Henüz şarkı yok. + Şarkı ekle ile başla.')).toBeInTheDocument()
+    expect(screen.getByText('Henüz şarkı yok. ＋ Şarkı ile başla.')).toBeInTheDocument()
   })
 
   it('form validates and does not submit invalid input', () => {
     const onAdd = vi.fn()
     render(<SongList library={base} onOpen={() => {}} onAdd={onAdd} recordingCounts={{}} />)
-    fireEvent.click(screen.getByRole('button', { name: '+ Şarkı ekle' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Şarkı ekle' }))
     fireEvent.change(screen.getByLabelText('Tempo (BPM)'), { target: { value: '' } })
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     expect(screen.getByText('Şarkı adı boş olamaz.')).toBeInTheDocument()
@@ -86,21 +99,21 @@ describe('SongList', () => {
 
   it('submitted song appears in the current tab', async () => {
     render(<Harness />)
-    fireEvent.click(screen.getByRole('tab', { name: 'Bildiğim (1)' }))
-    fireEvent.click(screen.getByRole('button', { name: '+ Şarkı ekle' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Bildiğim 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Şarkı ekle' }))
     expect(screen.getByLabelText('Durum')).toHaveValue('known')
     expect(screen.getByLabelText('Tempo (BPM)')).toHaveValue('100')
     expect(screen.getByLabelText('Sayım (vuruş)')).toHaveValue('4')
     fireEvent.change(screen.getByLabelText('Şarkı adı'), { target: { value: 'Yeni Şarkı' } })
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     expect(await screen.findByText(/Yeni Şarkı/)).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Bildiğim (2)' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Bildiğim 2' })).toBeInTheDocument()
     expect(within(screen.getByRole('tabpanel')).queryByLabelText('Şarkı adı')).toBeNull()
   })
 
   it('cancel closes the form', () => {
     render(<Harness />)
-    fireEvent.click(screen.getByRole('button', { name: '+ Şarkı ekle' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Şarkı ekle' }))
     fireEvent.click(screen.getByRole('button', { name: 'Vazgeç' }))
     expect(screen.queryByLabelText('Şarkı adı')).toBeNull()
   })
@@ -108,7 +121,7 @@ describe('SongList', () => {
   it('failed save shows a message and keeps the form with its input', async () => {
     const onAdd = vi.fn().mockRejectedValue(new Error('disk'))
     render(<SongList library={base} onOpen={() => {}} onAdd={onAdd} recordingCounts={{}} />)
-    fireEvent.click(screen.getByRole('button', { name: '+ Şarkı ekle' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Şarkı ekle' }))
     fireEvent.change(screen.getByLabelText('Şarkı adı'), { target: { value: 'Yeni' } })
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     expect(await screen.findByText('Kaydedilemedi, tekrar dene.')).toBeInTheDocument()

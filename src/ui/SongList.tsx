@@ -9,11 +9,13 @@ interface Props {
   onOpen: (id: string) => void
   onAdd: (input: SongInput) => void | Promise<void>
   recordingCounts: Record<string, number>
+  /** Opens the global settings dialog (⚙ in the header). */
+  onSettings?: () => void
 }
 
 const TABS: { status: SongStatus; label: string }[] = [
-  { status: 'known', label: 'Bildiğim' },
   { status: 'learning', label: 'Çalıştığım' },
+  { status: 'known', label: 'Bildiğim' },
 ]
 
 // Turkish casing maps "I" to "ı", so a plain "OASIS" query would miss "Oasis"; accept either casing scheme.
@@ -21,7 +23,7 @@ const matches = (text: string, query: string) =>
   text.toLocaleLowerCase('tr').includes(query.toLocaleLowerCase('tr')) ||
   text.toLowerCase().includes(query.toLowerCase())
 
-export default function SongList({ library, onOpen, onAdd, recordingCounts }: Props) {
+export default function SongList({ library, onOpen, onAdd, recordingCounts, onSettings }: Props) {
   const [tab, setTab] = useState<SongStatus>('learning')
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
@@ -44,8 +46,8 @@ export default function SongList({ library, onOpen, onAdd, recordingCounts }: Pr
 
   if (adding) {
     return (
-      <main className="screen">
-        <h1>Şarkı ekle</h1>
+      <main className="screen narrow">
+        <h1 className="display">Şarkı ekle</h1>
         <SongForm
           initial={{ status: tab }}
           onCancel={() => setAdding(false)}
@@ -60,37 +62,58 @@ export default function SongList({ library, onOpen, onAdd, recordingCounts }: Pr
 
   return (
     <main className="screen song-list">
-      <div role="tablist" className="row">
-        {TABS.map((t) => (
-          <button
-            key={t.status}
-            role="tab"
-            aria-selected={tab === t.status}
-            className={tab === t.status ? 'active' : undefined}
-            onClick={() => setTab(t.status)}
-          >
-            {`${t.label} (${counts[t.status]})`}
+      <header className="topbar">
+        <div role="tablist" className="tabs">
+          {TABS.map((t) => (
+            <button
+              key={t.status}
+              role="tab"
+              aria-selected={tab === t.status}
+              className="tab"
+              onClick={() => setTab(t.status)}
+            >
+              {t.label} <span className="tab-n">{counts[t.status]}</span>
+            </button>
+          ))}
+        </div>
+        <div className="topbar-actions">
+          <button className="btn btn-ghost" aria-label="Şarkı ekle" onClick={() => setAdding(true)}>
+            ＋ Şarkı
           </button>
-        ))}
-      </div>
-      <input type="search" placeholder="Ara…" aria-label="Ara" value={query} onChange={(e) => setQuery(e.target.value)} />
+          {onSettings && (
+            <button className="icon-btn" aria-label="Ayarlar" onClick={onSettings}>
+              ⚙
+            </button>
+          )}
+        </div>
+      </header>
+      <input
+        type="search"
+        className="search"
+        placeholder="Ara"
+        aria-label="Ara"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
       <div role="tabpanel" className="rows">
         {library.songs.length === 0 ? (
-          <p className="muted">Henüz şarkı yok. + Şarkı ekle ile başla.</p>
+          <p className="empty">Henüz şarkı yok. ＋ Şarkı ile başla.</p>
         ) : rows.length === 0 ? (
-          <p className="muted">Eşleşen şarkı yok.</p>
+          <p className="empty">Eşleşen şarkı yok.</p>
         ) : (
           rows.map((s) => (
             <button key={s.id} className="song-row" onClick={() => onOpen(s.id)}>
-              <span className="song-title">{s.artist ? `${s.title} — ${s.artist}` : s.title}</span>
-              <span className="song-bpm">{s.bpm}</span>
-              <span className="song-count">{recordingCounts[s.id] ? `${recordingCounts[s.id]} kayıt` : '—'}</span>
-              <span aria-hidden="true">›</span>
+              <span className="song-main">
+                <span className="song-title">{s.title}</span>
+                {s.artist && <span className="song-artist">{s.artist}</span>}
+              </span>
+              <span className="song-meta">
+                <em>{s.bpm}</em> BPM · <span className="song-count">{recordingCounts[s.id] ? `${recordingCounts[s.id]} kayıt` : '—'}</span>
+              </span>
             </button>
           ))
         )}
       </div>
-      <button onClick={() => setAdding(true)}>+ Şarkı ekle</button>
     </main>
   )
 }

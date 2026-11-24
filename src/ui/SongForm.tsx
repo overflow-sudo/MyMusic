@@ -48,7 +48,7 @@ export default function SongForm({ initial, onSubmit, onCancel }: Props) {
   }
 
   return (
-    <form className="song-form" onSubmit={(e) => void submit(e)} noValidate>
+    <form className="song-form form" onSubmit={(e) => void submit(e)} noValidate>
       <label>
         Şarkı adı
         <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
@@ -76,9 +76,9 @@ export default function SongForm({ initial, onSubmit, onCancel }: Props) {
       </label>
       {errors.countInBeats && <p className="note" role="alert">{errors.countInBeats}</p>}
       {saveError && <p className="note" role="alert">Kaydedilemedi, tekrar dene.</p>}
-      <div className="row">
-        <button type="submit" disabled={busy}>Kaydet</button>
-        <button type="button" onClick={onCancel}>Vazgeç</button>
+      <div className="actions">
+        <button type="submit" className="btn btn-primary" disabled={busy}>Kaydet</button>
+        <button type="button" className="btn btn-ghost" onClick={onCancel}>Vazgeç</button>
       </div>
     </form>
   )

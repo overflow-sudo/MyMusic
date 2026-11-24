@@ -84,7 +84,7 @@ describe('App shell', () => {
     vi.mocked(fh.getSavedHandle).mockResolvedValue(handle)
     vi.mocked(fh.ensurePermission).mockResolvedValue(true)
     render(<App />)
-    await waitFor(() => expect(screen.getByText('Henüz şarkı yok. + Şarkı ekle ile başla.')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Henüz şarkı yok. ＋ Şarkı ile başla.')).toBeInTheDocument())
   })
   it('denied reconnect shows feedback', async () => {
     const handle = {} as FileSystemDirectoryHandle
@@ -114,6 +114,6 @@ describe('App shell', () => {
     vi.mocked(fh.ensurePermission).mockResolvedValue(true)
     render(<App />)
     expect(await screen.findByText('2 yarım kayıt kurtarıldı')).toBeInTheDocument()
-    expect(await screen.findByText('Henüz şarkı yok. + Şarkı ekle ile başla.')).toBeInTheDocument()
+    expect(await screen.findByText('Henüz şarkı yok. ＋ Şarkı ile başla.')).toBeInTheDocument()
   })
 })

@@ -6,6 +6,7 @@ import { fromHandle } from './storage/fsDir'
 import { recoverPending } from './storage/chunkWriter'
 import BrokenLibrary from './ui/BrokenLibrary'
 import FolderGate from './ui/FolderGate'
+import LightLayer from './ui/LightLayer'
 import Recorder from './ui/Recorder'
 import SettingsDialog from './ui/SettingsDialog'
 import SongDetail from './ui/SongDetail'
@@ -47,16 +48,13 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
       cancelled = true
     }
   }, [root, songs, lib.status, countsVersion])
-  if (lib.status === 'loading') return <main className="screen"><p>Yükleniyor…</p></main>
+  if (lib.status === 'loading') return <main className="screen narrow"><p className="dim">Yükleniyor…</p></main>
   if (lib.status === 'broken') return <BrokenLibrary error={lib.error} onReset={lib.resetBroken} />
   const selected = selectedSongId ? songs.find((s) => s.id === selectedSongId) : undefined
   // SongList stays mounted (hidden) so its tab and search survive opening a song.
   const latencyMs = lib.library.settings.latencyCompensationMs
   return (
     <>
-      <header className="app-header">
-        <button onClick={() => setSettingsOpen(true)}>⚙ Ayarlar</button>
-      </header>
       {settingsOpen && (
         <SettingsDialog
           value={latencyMs}
@@ -72,6 +70,7 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
             await lib.addSong(input)
           }}
           recordingCounts={recordingCounts}
+          onSettings={() => setSettingsOpen(true)}
         />
       </div>
       {selected && (
@@ -142,7 +141,7 @@ export default function App() {
 
   let body
   if (!supported) body = <Unsupported />
-  else if (phase.kind === 'checking') body = <main className="screen"><p>Yükleniyor…</p></main>
+  else if (phase.kind === 'checking') body = <main className="screen narrow"><p className="dim">Yükleniyor…</p></main>
   else if (phase.kind === 'open') body = <Shell handle={phase.handle} />
   else {
     const saved = phase.saved
@@ -174,6 +173,7 @@ export default function App() {
   }
   return (
     <>
+      <LightLayer />
       {body}
       {recovered > 0 && <div role="status" className="toast">{recovered} yarım kayıt kurtarıldı</div>}
     </>
