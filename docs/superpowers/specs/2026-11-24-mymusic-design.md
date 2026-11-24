@@ -11,7 +11,7 @@ Gitar çalan tek bir kullanıcı için kişisel bir repertuar ve kayıt uygulama
 - kayıttan önce şarkının temposunda bir **metronom sayımı** duymak (sayım bitince metronom susar, kayıt başlar),
 - tüm kayıtların **kendi bilgisayarında** dosya olarak durmasını istiyor.
 
-Kullanıcının düzeni: **Windows**, **M-Audio** ses kartı (Solo), **kondenser mikrofon**, sinyaller **Voicemeeter** ile karıştırılıyor.
+Kullanıcının düzeni: **Windows**; gitar → **NUX MG-300** (efekt pedalı) → **M-Audio** ses kartı (Solo); ayrıca **kondenser mikrofon**; sinyaller **Voicemeeter** ile karıştırılıyor. Kullanıcı sesi **M-Audio'ya bağlı kulaklıktan** dinliyor. MG-300 bilgisayara tuş/MIDI göndermiyor; uygulamayı kontrol eden bir ayak pedalı **yok**.
 
 ## Hedefler
 
@@ -22,8 +22,9 @@ Kullanıcının düzeni: **Windows**, **M-Audio** ses kartı (Solo), **kondenser
    1. Ses ya da video modu seçilir; video modunda kamera önizlemesi açılır.
    2. Kamera ve mikrofon (giriş) cihazı menüden seçilir; seçim hatırlanır. Voicemeeter sanal çıkışları (ör. "Voicemeeter Out B1") ve M-Audio doğrudan listede görünür.
    3. Kayıt öncesi giriş seviye göstergesi görünür.
-   4. **● Kaydet** → metronom şarkının BPM'inde N vuruş sayar (ilk vuruş vurgulu), ekranda büyük "4 · 3 · 2 · 1" geri sayımı.
-   5. N vuruş bitince metronom susar ve kayıt o anda başlar. **Sayım sesi kayda girmez.**
+   3a. **Metronom çıkışı** ayrı bir menüden seçilir (Web Audio `AudioContext.setSinkId`); varsayılan öneri M-Audio kulaklık çıkışı. Amaç tıkın kaydedilen Voicemeeter hattına (B1 vb.) girmemesi. M-Audio Voicemeeter tarafından tutulduğu için doğrudan açılamazsa, ekranda kısa bir ipucu: "Voicemeeter'da tarayıcı sesini yalnızca A1'e (kulaklık) gönder, B hattına gönderme."
+   4. **● Kaydet** ya da **boşluk tuşu** → metronom şarkının BPM'inde N vuruş sayar (ilk vuruş vurgulu), ekranda büyük "4 · 3 · 2 · 1" geri sayımı.
+   5. N vuruş bitince metronom susar ve kayıt o anda başlar. **Sayım sesi kayda girmez.** İlk vuruşun kesilmemesi için kaydedici son vuruşun bitişinden kısa bir süre (~150 ms) önce başlatılır; tık kaydedilen hatta gitmediği için bu güvenlidir.
    6. Kayıt sırasında kırmızı nokta + süre (`● 0:42`).
    7. **■ Durdur** ya da **boşluk tuşu** kaydı bitirir. Sayım sırasında **Esc** / Durdur iptal eder (dosya oluşmaz).
    8. Dosya seçilen klasöre otomatik yazılır ve listede en üstte belirir.
@@ -45,7 +46,9 @@ Kullanıcının düzeni: **Windows**, **M-Audio** ses kartı (Solo), **kondenser
 - Metronom sesinin kayda girmesi.
 - Bir kaydın kaybolması — tarayıcı sekmesi kayıt sırasında kapanırsa bile o ana kadarki kısım diskte kalmalı.
 - Kayıtların kullanıcının göremediği bir yerde (tarayıcı deposunda) saklanması.
-- Gitar elindeyken fareye uzanmayı gerektiren bir durdurma akışı.
+- Gitar elindeyken fareye uzanmayı gerektiren bir başlatma/durdurma akışı (boşluk tuşu ikisini de yapar).
+
+Bilinen sınır (kullanıcıya söylendi): tarayıcı tuşları yalnızca penceresi öndeyken duyar; Voicemeeter penceresine geçilirse önce uygulamaya geri tıklamak gerekir.
 
 ## Kısıtlar
 
@@ -113,7 +116,7 @@ Arayüz dili Türkçe.
   Şarkı klasörü oluşturulduğu adla kalır (şarkı adı değişse bile id üzerinden bulunur).
 - **`mymusic.json` şeması:** `{ version: 1, songs: [{ id, title, artist, status: "known" | "learning", bpm, countInBeats, createdAt, updatedAt }] }`. Bilinmeyen alanlar korunur (ileride alan eklemek kolay olsun).
 - **Kayıt listesi** şarkı klasörü taranarak oluşturulur; böylece Dosya Gezgini'nden silinen dosya listeden de kalkar.
-- **Kaybolmaya karşı:** MediaRecorder her ~1 saniyede bir parça verir, parçalar doğrudan dosyaya akıtılır (FileSystemWritableFileStream).
+- **Kaybolmaya karşı:** Chrome yazma akışını ancak `close()` ile diske işler, bu yüzden tek bir akış yeterli değil. MediaRecorder parçaları birkaç saniyelik numaralı dosyalar halinde `<klasör>/.parcalar/<kayıt-id>/` altına yazılır; durdurunca sırayla birleştirilip asıl `.webm` dosyası oluşturulur ve parça klasörü silinir. Açılışta yarım kalmış parça klasörü bulunursa birleştirilip kayıt kurtarılır. En fazla birkaç saniye kaybolur.
 - **Süre:** MediaRecorder'ın ürettiği webm dosyalarında süre bilgisi eksik olur; süre oynatma sırasında ya da kayıt anında ölçülüp gösterilir (uygulama içi bir yan dosyada veya `mymusic.json`'da saklanabilir — kurucunun kararı).
 - **Metronom:** Web Audio API ile zamanlanmış tıklar (vurgulu ilk vuruş). Kayıt, son vuruştan bir vuruş aralığı sonra başlar.
 - **Video:** varsayılan 1280×720, 30 fps; cihaz ne destekliyorsa ona düşer.
