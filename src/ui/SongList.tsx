@@ -77,7 +77,7 @@ export default function SongList({ library, onOpen, onAdd, recordingCounts, onSe
           ))}
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-ghost" aria-label="Şarkı ekle" onClick={() => setAdding(true)}>
+          <button className="btn btn-ghost" onClick={() => setAdding(true)}>
             ＋ Şarkı
           </button>
           {onSettings && (

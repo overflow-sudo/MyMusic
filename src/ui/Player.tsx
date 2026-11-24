@@ -51,7 +51,9 @@ export default function Player({ src, kind, autoPlay, volume, onTime, extra }: P
       // MediaRecorder webm: measure on a detached element so the live one is never seeked (autoplay keeps playing).
       probedSrc.current = src
       void measureDuration(src, kind === 'video' ? 'video' : 'ses').then((m) => {
-        if (probedSrc.current === src && m !== null) setDuration(m)
+        if (probedSrc.current !== src) return
+        if (m === null) probedSrc.current = null // failed or timed out: a later duration event may retry
+        else setDuration(m)
       })
     }
   }
@@ -66,7 +68,7 @@ export default function Player({ src, kind, autoPlay, volume, onTime, extra }: P
   const seek = (sec: number) => {
     const el = ref.current
     if (!el || !Number.isFinite(sec)) return
-    const max = Number.isFinite(el.duration) ? el.duration : Infinity
+    const max = Number.isFinite(el.duration) ? el.duration : duration || Infinity
     const t = Math.min(Math.max(0, sec), max)
     el.currentTime = t
     setTime(t)
@@ -96,7 +98,8 @@ export default function Player({ src, kind, autoPlay, volume, onTime, extra }: P
     onTimeUpdate: update,
     onSeeked: update,
     onPlay: () => {
-      if (ref.current) claimPlayback(ref.current)
+      // Refused during a take: the coordinator paused the element again, so stay on "paused".
+      if (ref.current && !claimPlayback(ref.current)) return
       setPlaying(true)
     },
     onPause: () => setPlaying(false),

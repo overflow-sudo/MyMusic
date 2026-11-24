@@ -90,6 +90,42 @@ describe('Player', () => {
     expect(screen.getByRole('button', { name: 'Duraklat' })).toBeInTheDocument()
   })
 
+  it('seek clamps to the measured duration when the element reports Infinity', async () => {
+    duration = Infinity
+    vi.mocked(measureDuration).mockResolvedValue(125)
+    const { container } = render(<Player src="blob:x" kind="audio" />)
+    loaded(media(container))
+    expect(await screen.findByText('0:00 / 2:05')).toBeInTheDocument()
+    current = 122
+    fireEvent.click(screen.getByRole('button', { name: '5 saniye ileri' }))
+    expect(current).toBe(125)
+  })
+
+  it('a failed probe (null) is retried by a later duration event', async () => {
+    duration = Infinity
+    vi.mocked(measureDuration).mockResolvedValueOnce(null).mockResolvedValueOnce(90)
+    const { container } = render(<Player src="blob:x" kind="audio" />)
+    loaded(media(container))
+    await act(async () => {})
+    expect(measureDuration).toHaveBeenCalledTimes(1)
+    fireEvent.durationChange(media(container))
+    expect(measureDuration).toHaveBeenCalledTimes(2)
+    expect(await screen.findByText('0:00 / 1:30')).toBeInTheDocument()
+  })
+
+  it('play during a take is refused: the element is paused again', () => {
+    coordinator.setRecording(true)
+    try {
+      const { container } = render(<Player src="blob:x" kind="audio" />)
+      fireEvent.click(screen.getByRole('button', { name: 'Oynat' }))
+      expect(paused).toBe(true)
+      expect(media(container)).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Oynat' })).toBeInTheDocument()
+    } finally {
+      coordinator.setRecording(false)
+    }
+  })
+
   it('play claims playback; the button toggles to Duraklat; unmount unregisters', () => {
     const claim = vi.spyOn(coordinator, 'claimPlayback')
     const { container, unmount } = render(<Player src="blob:x" kind="audio" />)

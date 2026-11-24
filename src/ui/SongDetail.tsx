@@ -21,6 +21,8 @@ interface Props {
   drawerSlot?: ReactNode
   /** Bumped by the parent when a take was saved, so the list reloads. */
   recordingsVersion?: number
+  /** A take is running: the settings gear is disabled so the take can't be hidden behind a dialog. */
+  busy?: boolean
 }
 
 const STATUS: { value: SongStatus; label: string }[] = [
@@ -30,7 +32,7 @@ const STATUS: { value: SongStatus; label: string }[] = [
 // Status words are Turkish (ı → I, i → İ); artist names are often not ("Oasis" must not become "OASİS").
 const upperTr = (s: string) => s.toLocaleUpperCase('tr-TR')
 
-export default function SongDetail({ song, root, onBack, patchSong, deleteSong, recorder, drawerSlot, recordingsVersion = 0 }: Props) {
+export default function SongDetail({ song, root, onBack, patchSong, deleteSong, recorder, drawerSlot, recordingsVersion = 0, busy = false }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [saveError, setSaveError] = useState(false)
@@ -133,6 +135,7 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
             className="icon-btn gear"
             aria-label="Şarkı ayarları"
             aria-expanded={drawerOpen}
+            disabled={busy}
             onClick={() => setDrawerOpen(true)}
           >
             ⚙

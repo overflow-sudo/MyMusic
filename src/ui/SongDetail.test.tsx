@@ -54,6 +54,13 @@ function setup(opts: { song?: Song; fail?: boolean } = {}) {
 }
 
 describe('SongDetail', () => {
+  it('the settings gear is disabled while the recorder is busy', () => {
+    render(
+      <SongDetail song={base} root={createMemoryDir()} onBack={() => {}} patchSong={async () => {}} deleteSong={async () => {}} busy />,
+    )
+    expect(screen.getByRole('button', { name: 'Şarkı ayarları' })).toBeDisabled()
+  })
+
   it('status change persists', async () => {
     const { patches } = setup()
     openDrawer()

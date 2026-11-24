@@ -30,6 +30,7 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
   const [recordingCounts, setRecordingCounts] = useState<Record<string, number>>({})
   const [countsVersion, setCountsVersion] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [recorderBusy, setRecorderBusy] = useState(false)
   const songs = lib.library.songs
   const selected = selectedSongId ? songs.find((s) => s.id === selectedSongId) : undefined
   useSongLight(selected ? selected.bpm : null)
@@ -64,7 +65,7 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
           onClose={() => setSettingsOpen(false)}
         />
       )}
-      <div hidden={!!selected}>
+      <div hidden={!!selected} inert={settingsOpen}>
         <SongList
           library={lib.library}
           onOpen={setSelectedSongId}
@@ -83,17 +84,20 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
           patchSong={lib.patchSong}
           deleteSong={lib.deleteSong}
           recordingsVersion={countsVersion}
+          busy={recorderBusy}
           recorder={(drawerOpen) => (
             <Recorder
               song={selected}
               root={root}
               latencyMs={latencyMs}
               shortcutsEnabled={!settingsOpen && !drawerOpen}
+              onBusyChange={setRecorderBusy}
               onSaved={() => setCountsVersion((v) => v + 1)}
             />
           )}
           onBack={() => {
             setSelectedSongId(null)
+            setRecorderBusy(false)
             setCountsVersion((v) => v + 1)
           }}
         />

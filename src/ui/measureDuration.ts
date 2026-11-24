@@ -1,8 +1,12 @@
+const TIMEOUT_MS = 5000
+
 // MediaRecorder webm files report Infinity until the end is seeked to; seeking far forces the real value.
 export function measureDuration(url: string, kind: 'video' | 'ses'): Promise<number | null> {
   return new Promise((resolve) => {
     const el = document.createElement(kind === 'video' ? 'video' : 'audio')
+    const timer = setTimeout(() => done(null), TIMEOUT_MS)
     const done = (v: number | null) => {
+      clearTimeout(timer)
       el.removeAttribute('src')
       resolve(v)
     }

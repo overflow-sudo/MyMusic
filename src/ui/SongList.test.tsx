@@ -89,7 +89,7 @@ describe('SongList', () => {
   it('form validates and does not submit invalid input', () => {
     const onAdd = vi.fn()
     render(<SongList library={base} onOpen={() => {}} onAdd={onAdd} recordingCounts={{}} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Şarkı ekle' }))
+    fireEvent.click(screen.getByRole('button', { name: '＋ Şarkı' }))
     fireEvent.change(screen.getByLabelText('Tempo (BPM)'), { target: { value: '' } })
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     expect(screen.getByText('Şarkı adı boş olamaz.')).toBeInTheDocument()
@@ -100,7 +100,7 @@ describe('SongList', () => {
   it('submitted song appears in the current tab', async () => {
     render(<Harness />)
     fireEvent.click(screen.getByRole('tab', { name: 'Bildiğim 1' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Şarkı ekle' }))
+    fireEvent.click(screen.getByRole('button', { name: '＋ Şarkı' }))
     expect(screen.getByLabelText('Durum')).toHaveValue('known')
     expect(screen.getByLabelText('Tempo (BPM)')).toHaveValue('100')
     expect(screen.getByLabelText('Sayım (vuruş)')).toHaveValue('4')
@@ -113,7 +113,7 @@ describe('SongList', () => {
 
   it('cancel closes the form', () => {
     render(<Harness />)
-    fireEvent.click(screen.getByRole('button', { name: 'Şarkı ekle' }))
+    fireEvent.click(screen.getByRole('button', { name: '＋ Şarkı' }))
     fireEvent.click(screen.getByRole('button', { name: 'Vazgeç' }))
     expect(screen.queryByLabelText('Şarkı adı')).toBeNull()
   })
@@ -121,7 +121,7 @@ describe('SongList', () => {
   it('failed save shows a message and keeps the form with its input', async () => {
     const onAdd = vi.fn().mockRejectedValue(new Error('disk'))
     render(<SongList library={base} onOpen={() => {}} onAdd={onAdd} recordingCounts={{}} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Şarkı ekle' }))
+    fireEvent.click(screen.getByRole('button', { name: '＋ Şarkı' }))
     fireEvent.change(screen.getByLabelText('Şarkı adı'), { target: { value: 'Yeni' } })
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
     expect(await screen.findByText('Kaydedilemedi, tekrar dene.')).toBeInTheDocument()

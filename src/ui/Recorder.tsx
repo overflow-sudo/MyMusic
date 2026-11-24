@@ -4,7 +4,7 @@ import { listDevices, saveDevice, savedDevice, suggestedOutput, type DeviceKind 
 import { errName, inputLabel, mediaErrorMessage, noDevices, openStream, stopStream, type Devices } from './recorderMedia'
 import { decodeTrack, startTake, type Take, type TakeOptions } from '../audio/engine'
 import type { SessionState } from '../audio/sessionMachine'
-import { pauseAll } from './mediaCoordinator'
+import { pauseAll, setRecording } from './mediaCoordinator'
 import { isTypingTarget, shortcutAction } from '../audio/shortcuts'
 import { formatTimecode } from '../domain/time'
 import type { RecordingKind, Song } from '../domain/types'
@@ -24,13 +24,15 @@ interface Props {
   onSaved(): void
   /** false while another modal (settings) is open. */
   shortcutsEnabled?: boolean
+  /** true while a take is counting in, recording or finalizing. */
+  onBusyChange?(busy: boolean): void
 }
 
 const TRACK_MISSING = 'Parça dosyası bulunamadı, parçasız kaydediliyor.'
 const TRACK_PAST_END = 'Başlangıç noktası parçanın sonundan sonra, parçasız kaydediliyor.'
 const TRACK_UNDECODABLE = 'Parça dosyası okunamadı, parçasız kaydediliyor.'
 
-export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnabled = true }: Props) {
+export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnabled = true, onBusyChange }: Props) {
   const [mode, setMode] = useState<RecordingKind>('ses')
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [devices, setDevices] = useState<Devices>(noDevices)
@@ -143,6 +145,7 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
       const track = await loadTrack()
       if (!mounted.current || streamRef.current !== input) return
       pauseAll() // one medium at a time
+      setRecording(true) // and nothing may start playing until the take settles
       const t = startTake({
         kind: mode,
         song,
@@ -168,10 +171,12 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
         )
         .finally(() => {
           if (take.current === t) take.current = null
+          setRecording(false)
           // Saved, cancelled or failed: back to the song's free pulse (unless the screen is gone).
           if (mounted.current && lightBus.getSource().kind === 'take') lightBus.setSource({ kind: 'free', bpm: bpmRef.current })
         })
     } finally {
+      if (!take.current) setRecording(false) // startTake threw or we bailed out before it
       starting.current = false
       if (mounted.current) setPreparing(false)
     }
@@ -188,10 +193,15 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!enabledRef.current) return
+      const st = sessionRef.current
+      const running = st === 'countingIn' || st === 'recording'
+      // A running take can always be stopped/cancelled; only starting honours the disabled flag and open dialogs.
+      if (!enabledRef.current && !running) return
       const target = e.target instanceof HTMLElement ? e.target : document.body
-      // Players, fields and other dialogs (settings) keep their own Space; only the countdown overlay is ours.
-      if (isTypingTarget(target) || target.closest('[role="dialog"]:not(.countdown)')) return
+      // Players and fields keep their own Space; other dialogs (settings) block starting, the countdown overlay is ours.
+      if (isTypingTarget(target)) return
+      const inDialog = !!target.closest('[role="dialog"]:not(.countdown)')
+      if ((!enabledRef.current || inDialog) && !running) return
       // Space is the record key: never let it also "click" a focused button or scroll.
       if (e.key === ' ') e.preventDefault()
       if (e.repeat) return
@@ -222,6 +232,13 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const busy = session === 'countingIn' || session === 'recording' || session === 'finalizing'
+  const onBusyRef = useRef(onBusyChange)
+  useEffect(() => {
+    onBusyRef.current = onBusyChange
+  })
+  useEffect(() => {
+    onBusyRef.current?.(busy)
+  }, [busy])
   const canStart = !!stream && !busy && !preparing
 
   const selectors = (

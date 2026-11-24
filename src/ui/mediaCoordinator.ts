@@ -7,9 +7,21 @@ export function register(el: HTMLMediaElement): () => void {
   }
 }
 
-/** Pauses every registered element except `el`: one medium at a time. */
-export function claimPlayback(el: HTMLMediaElement): void {
+let recording = false
+
+/** While a take runs nothing may play: claimPlayback refuses. */
+export function setRecording(on: boolean): void {
+  recording = on
+}
+
+/** Pauses every registered element except `el`: one medium at a time. Returns false (and pauses `el`) during a take. */
+export function claimPlayback(el: HTMLMediaElement): boolean {
+  if (recording) {
+    el.pause()
+    return false
+  }
   for (const p of players) if (p !== el) p.pause()
+  return true
 }
 
 export function pauseAll(): void {

@@ -7,6 +7,7 @@ import type { Song } from '../domain/types'
 import { lightBus } from '../light/lightBus'
 import { createMemoryDir } from '../storage/memoryDir'
 import { songDir } from '../storage/repo'
+import * as coordinator from './mediaCoordinator'
 import { register } from './mediaCoordinator'
 import Recorder from './Recorder'
 import SongDetail from './SongDetail'
@@ -331,6 +332,41 @@ describe('Recorder', () => {
     expect(fireEvent.keyDown(document.body, { key: ' ' })).toBe(false)
     await act(async () => finishDecode({ duration: 100 } as AudioBuffer))
     expect(startTakeMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('Space stops a running take even while shortcuts are disabled (dialog open); start stays blocked', async () => {
+    const root = createMemoryDir()
+    const { rerender } = render(<Recorder song={plain} root={root} latencyMs={null} onSaved={() => {}} />)
+    await chooseAudio()
+    fireEvent.keyDown(document.body, { key: ' ' })
+    await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
+    act(() => lastOptions().onState('recording'))
+    rerender(<Recorder song={plain} root={root} latencyMs={null} onSaved={() => {}} shortcutsEnabled={false} />)
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    const inner = document.createElement('div')
+    dialog.appendChild(inner)
+    document.body.appendChild(dialog)
+    fireEvent.keyDown(inner, { key: ' ' })
+    expect(takeStop).toHaveBeenCalledTimes(1)
+    dialog.remove()
+  })
+
+  it('reports busy while a take runs and the take blocks playback until it settles', async () => {
+    const onBusyChange = vi.fn()
+    const setRec = vi.spyOn(coordinator, 'setRecording')
+    render(<Recorder song={plain} root={createMemoryDir()} latencyMs={null} onSaved={() => {}} onBusyChange={onBusyChange} />)
+    await chooseAudio()
+    expect(onBusyChange).not.toHaveBeenCalledWith(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
+    await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
+    expect(setRec).toHaveBeenLastCalledWith(true)
+    act(() => lastOptions().onState('countingIn'))
+    expect(onBusyChange).toHaveBeenLastCalledWith(true)
+    await act(async () => finishTake(null))
+    expect(setRec).toHaveBeenLastCalledWith(false)
+    act(() => lastOptions().onState('idle'))
+    expect(onBusyChange).toHaveBeenLastCalledWith(false)
   })
 
   it('Space again during count-in does nothing, even with the button focused', async () => {
