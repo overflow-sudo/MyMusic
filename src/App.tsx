@@ -6,6 +6,8 @@ import { fromHandle } from './storage/fsDir'
 import { recoverPending } from './storage/chunkWriter'
 import BrokenLibrary from './ui/BrokenLibrary'
 import FolderGate from './ui/FolderGate'
+import Recorder from './ui/Recorder'
+import SettingsDialog from './ui/SettingsDialog'
 import SongDetail from './ui/SongDetail'
 import SongList from './ui/SongList'
 import Unsupported from './ui/Unsupported'
@@ -25,6 +27,7 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
   const [selectedSongId, setSelectedSongId] = useState<string | null>(null)
   const [recordingCounts, setRecordingCounts] = useState<Record<string, number>>({})
   const [countsVersion, setCountsVersion] = useState(0)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const songs = lib.library.songs
   useEffect(() => {
     if (lib.status !== 'ready') return
@@ -48,8 +51,19 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
   if (lib.status === 'broken') return <BrokenLibrary error={lib.error} onReset={() => void lib.resetBroken()} />
   const selected = selectedSongId ? songs.find((s) => s.id === selectedSongId) : undefined
   // SongList stays mounted (hidden) so its tab and search survive opening a song.
+  const latencyMs = lib.library.settings.latencyCompensationMs
   return (
     <>
+      <header className="app-header">
+        <button onClick={() => setSettingsOpen(true)}>⚙ Ayarlar</button>
+      </header>
+      {settingsOpen && (
+        <SettingsDialog
+          value={latencyMs}
+          onSave={(v) => lib.setSettings({ latencyCompensationMs: v })}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
       <div hidden={!!selected}>
         <SongList
           library={lib.library}
@@ -68,6 +82,14 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
           patchSong={lib.patchSong}
           deleteSong={lib.deleteSong}
           recordingsVersion={countsVersion}
+          recorder={
+            <Recorder
+              song={selected}
+              root={root}
+              latencyMs={latencyMs}
+              onSaved={() => setCountsVersion((v) => v + 1)}
+            />
+          }
           onBack={() => {
             setSelectedSongId(null)
             setCountsVersion((v) => v + 1)
