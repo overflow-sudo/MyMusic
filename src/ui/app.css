@@ -415,3 +415,29 @@ button.danger-link:hover { color: #f0574e; text-decoration: underline; text-unde
 .cover-panel-actions { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .cover-status { font-size: 14px; }
 .cover-status:empty { margin-top: -10px; } /* kept in the tree as a live region, without adding a gap */
+
+/* ---------- Chords: drawer editor + panel beside the stage ---------- */
+textarea.chords-input {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px; line-height: 1.45;
+  width: 100%; resize: vertical; white-space: pre; overflow-wrap: normal; overflow-x: auto; tab-size: 4;
+}
+.chords-search { align-self: flex-start; font-size: 13px; color: var(--dim); }
+.chords-search:hover { color: var(--fg); }
+.chords-preview { max-height: 200px; overflow: auto; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.chords-preview .chord-sheet { overflow: visible; max-width: none; width: max-content; }
+/* Without chords the wrapper is layout-neutral, so the stage keeps its old full width. */
+.stage-area { display: contents; }
+.stage-area.has-chords { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.chords-panel {
+  min-width: 0; border-radius: 14px; border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 55%, transparent);
+}
+.chords-panel-scroll { overflow: auto; overscroll-behavior: contain; max-height: 50vh; padding: 14px 18px; }
+.chords-panel .chord-sheet { overflow: visible; max-width: none; width: max-content; }
+@media (min-width: 900px) {
+  .song-detail:has(.has-chords) { max-width: 1240px; }
+  .stage-area.has-chords { grid-template-columns: minmax(0, 62fr) minmax(0, 38fr); }
+  /* The panel takes the recorder's height (the scroller doesn't size the row) and scrolls on its own. */
+  .chords-panel { position: relative; max-height: 70vh; }
+  .chords-panel-scroll { position: absolute; inset: 0; max-height: none; }
+}

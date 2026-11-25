@@ -258,7 +258,7 @@ describe('SongDetail layout and settings drawer', () => {
     const dialog = screen.getByRole('dialog', { name: 'Şarkı ayarları' })
     expect(within(dialog).getByRole('button', { name: 'Çalıştığım' })).toHaveFocus()
     const labels = within(dialog).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)
-    expect(labels).toEqual(['Durum', 'Tempo', 'Sayım', 'Parça', 'Cihazlar', 'Işık'])
+    expect(labels).toEqual(['Durum', 'Tempo', 'Sayım', 'Parça', 'Akorlar', 'Cihazlar', 'Işık'])
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(gear).toHaveFocus()

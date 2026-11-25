@@ -5,6 +5,8 @@ import type { FsDir } from '../storage/fsDir'
 import { importTrack, readTrack, removeTrack } from '../storage/repo'
 import type { CoverActions, FindResult } from '../cover/useCovers'
 import CoverArt from './CoverArt'
+import ChordSheet from './ChordSheet'
+import ChordsEditor from './ChordsEditor'
 import CoverPanel from './CoverPanel'
 import Drawer from './Drawer'
 import LightModeSegment from './LightModeSegment'
@@ -119,6 +121,7 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
   }
 
   const statusLabel = STATUS.find((s) => s.value === song.status)?.label ?? ''
+  const hasChords = !!song.chords?.trim()
   const meta = [song.artist.toUpperCase(), upperTr(statusLabel)].filter(Boolean).join(' · ')
 
   return (
@@ -158,7 +161,17 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
           </button>
         </header>
 
-        {recorder && <div className="recorder-slot">{typeof recorder === 'function' ? recorder(drawerOpen) : recorder}</div>}
+        {/* Same tree with or without chords, so adding chords never remounts the recorder. */}
+        <div className={hasChords ? 'stage-area has-chords' : 'stage-area'}>
+          {recorder && <div className="recorder-slot">{typeof recorder === 'function' ? recorder(drawerOpen) : recorder}</div>}
+          {hasChords && (
+            <aside className="chords-panel" aria-label="Akorlar">
+              <div className="chords-panel-scroll">
+                <ChordSheet text={song.chords!} size="lg" />
+              </div>
+            </aside>
+          )}
+        </div>
 
         <section className="song-recordings">
           <h2>Kayıtlar</h2>
@@ -254,6 +267,10 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
               onChange={changeTrack}
               loadFile={() => readTrack(root, song)}
             />
+          </section>
+          <section className="drawer-section">
+            <h3 className="drawer-label">Akorlar</h3>
+            <ChordsEditor song={song} onSave={(chords) => void save({ chords })} />
           </section>
           <section className="drawer-section">
             <h3 className="drawer-label">Cihazlar</h3>

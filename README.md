@@ -1,6 +1,6 @@
 # MyMusic
 
-Gitar çalışırken kendini ses veya video olarak kaydetmeni sağlayan, tamamen tarayıcıda çalışan küçük bir uygulama. Şarkılarını listeler, istersen arkada bir MP3 çaldırır (önce metronom ön sayımı), kaydı bilgisayarındaki bir klasöre yazar. Sunucu yok, hesap yok, ağ çağrısı yok.
+Gitar çalışırken kendini ses veya video olarak kaydetmeni sağlayan, tamamen tarayıcıda çalışan küçük bir uygulama. Şarkılarını listeler, istersen arkada bir MP3 çaldırır (önce metronom ön sayımı), kaydı bilgisayarındaki bir klasöre yazar. Sunucu yok, hesap yok; tek ağ çağrısı albüm kapağı aramasıdır (bkz. **Kapak**).
 
 Canlı sürüm: https://overflow-sudo.github.io/MyMusic/
 
@@ -29,7 +29,7 @@ Bir şarkıyı silmek dosyalarını silmez; dosyalar klasörde kalır.
 
 **Liste ekranı**: şarkılar sekmelerle (Çalıştığım / Bildiğim) listelenir, üstteki arama kutusuyla süzülür. Sağ üstteki **⚙** genel ayar panelini açar: gecikme telafisi (ms; boş bırakırsan otomatik ölçülür) ve **Işık** seçimi. Esc paneli kapatır.
 
-**Şarkı ekranı**: şarkıyı açtığında ses modu hazır gelir ve mikrofon kendiliğinden açılır (tarayıcı ilk seferde izin ister). İzin verilmezse ekran yine kullanılabilir; **Ses** veya **Video** düğmesine tekrar basmak cihazı yeniden dener. Şarkı başlığındaki **⚙** şarkıya özel paneli açar: durum, tempo, sayım vuruşu, arka plan parçası, cihazlar, ışık ve düzenle / sil.
+**Şarkı ekranı**: şarkıyı açtığında ses modu hazır gelir ve mikrofon kendiliğinden açılır (tarayıcı ilk seferde izin ister). İzin verilmezse ekran yine kullanılabilir; **Ses** veya **Video** düğmesine tekrar basmak cihazı yeniden dener. Şarkı başlığındaki **⚙** şarkıya özel paneli açar: kapak, durum, tempo, sayım vuruşu, arka plan parçası, akorlar, cihazlar, ışık ve düzenle / sil.
 
 ### Kayıt
 
@@ -48,6 +48,30 @@ Bir şarkıyı silmek dosyalarını silmez; dosyalar klasörde kalır.
 ### İleri / geri sarma
 
 Parça önizlemesinde ve kayıtlar listesindeki oynatıcılarda **5 saniye geri / ileri** düğmeleri ve ilerleme çubuğu vardır. Kayıt sırasında sarma yoktur. Aynı anda tek ortam çalar: kayıt başlayınca tüm oynatıcılar durur.
+
+### Kapak
+
+Şarkı eklediğinde albüm kapağı Apple'ın (iTunes) arama servisinden arka planda, kendiliğinden bulunur ve şarkı klasörüne `cover.jpg` olarak kaydedilir. Kapağı olmayan eski şarkılar da liste açılınca aranır. Listede küçük, şarkı ekranında büyük gösterilir; kapak yoksa şarkı adının ilk harfi görünür.
+
+- **Gizlilik:** Apple'a yalnızca şarkı adı ve sanatçı adı gönderilir. Kayıtların, parçaların ve klasörün hiçbir zaman bilgisayarından çıkmaz.
+- Şarkı ekranındaki **⚙** panelinin **Kapak** bölümünden: **Kapağı yeniden bul** (aramayı tekrarlar), **Kendi resmini seç** (bilgisayarından bir resim), **Kaldır** (kapağı siler; kaldırdığın kapak bir daha kendiliğinden aranmaz).
+- İnternet yoksa veya kapak bulunamazsa uygulama normal çalışır, yalnızca harf gösterilir.
+
+### Akorlar
+
+Şarkının akorlarını kendin yapıştırırsın; uygulama akor sitelerinden bir şey çekmez.
+
+1. Şarkı ekranında **⚙** → **Akorlar** bölümünde **Akorları ara ↗** bağlantısı, şarkı adı + sanatçı + "chords" için Google aramasını yeni sekmede açar.
+2. Bulduğun akorları kopyala ve metin alanına yapıştır. Alandan çıktığında kaydedilir (`mymusic.json` içinde); alanı boşaltırsan akorlar kaldırılır. Alanın altında küçük bir önizleme görünür.
+3. Akor varsa kayıt ekranında sahnenin yanında (dar ekranda altında) büyük, sabit genişlikli yazıyla gösterilir ve kendi içinde kaydırılır. Akor yoksa sahne eskisi gibi tam genişliktedir.
+
+Tanınan biçimler:
+
+- **Akor satırları**: satırdaki tüm sözcükler akorsa (ör. `Am   G   C/E   F#m7`) akorlar renkli gösterilir, boşluklar korunur; böylece alttaki söz satırıyla hizalı kalır.
+- **Satır içi akorlar**: `[Am]Bugün [G]yine` gibi; akor, ait olduğu hecenin üstünde küçük yazılır.
+- **Bölüm başlıkları**: `[Verse]`, `[Chorus]`, `[Nakarat]` gibi akor olmayan köşeli parantezler küçük bir etiket olur.
+
+Akor alanına yazarken Boşluk (Space) kayıt başlatmaz.
 
 ### Işık
 
@@ -95,3 +119,4 @@ Bu adımlar kendi donanımınla elle denenmelidir:
 5. Kayıt sırasında sekmeyi kapat, tekrar aç → "1 yarım kayıt kurtarıldı", dosya çalıyor.
 6. Edge → "Uygulama olarak yükle".
 7. ⚙ panelinde Işık A / C / Kapalı değiştir → ışık hemen değişiyor.
+8. Yeni bir şarkı ekle → birkaç saniye içinde kapak geliyor; ⚙ → Akorlar'a akor yapıştır → kayıt ekranında sahnenin yanında görünüyor.
