@@ -384,4 +384,70 @@ describe('SongDetail layout and settings drawer', () => {
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(seen.at(-1)).toBe(false)
   })
+
+  describe('Kapak', () => {
+    function withCovers(song: Song = base) {
+      let resolveFind: (r: 'found' | 'none') => void = () => {}
+      const covers = {
+        findCover: vi.fn(() => new Promise<'found' | 'none'>((r) => (resolveFind = r))),
+        setUserCover: vi.fn(async () => {}),
+        removeCover: vi.fn(async () => {}),
+      }
+      const view = render(
+        <SongDetail song={song} root={createMemoryDir()} onBack={() => {}} patchSong={async () => {}} deleteSong={async () => {}} covers={covers} />,
+      )
+      return { covers, view, resolve: (r: 'found' | 'none') => resolveFind(r) }
+    }
+    const section = () => screen.getByRole('heading', { name: 'Kapak', level: 3 }).closest('section')!
+
+    it('the header shows the cover (placeholder letter) left of the title', () => {
+      const { view } = withCovers()
+      const head = view.container.querySelector('.song-head')!
+      const art = head.querySelector('.cover-art')!
+      expect(art).toHaveTextContent('W')
+      expect(art.compareDocumentPosition(head.querySelector('h1')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('is the first drawer section with Turkish buttons', () => {
+      withCovers({ ...base, cover: { source: 'itunes', fileName: 'cover.jpg' } })
+      openDrawer()
+      const dialog = screen.getByRole('dialog', { name: 'Şarkı ayarları' })
+      expect(within(dialog).getAllByRole('heading', { level: 3 })[0]).toHaveTextContent('Kapak')
+      const s = within(section())
+      expect(s.getByRole('button', { name: 'Kapağı yeniden bul' })).toBeInTheDocument()
+      expect(s.getByRole('button', { name: 'Kendi resmini seç' })).toBeInTheDocument()
+      expect(s.getByRole('button', { name: 'Kaldır' })).toBeInTheDocument()
+      expect(s.getByLabelText('Kendi resmini seç')).toHaveAttribute('accept', 'image/*')
+    })
+
+    it('re-find shows Aranıyor… while busy and "Kapak bulunamadı." after no result', async () => {
+      const { covers, resolve } = withCovers()
+      openDrawer()
+      fireEvent.click(within(section()).getByRole('button', { name: 'Kapağı yeniden bul' }))
+      expect(within(section()).getByRole('button', { name: 'Aranıyor…' })).toBeInTheDocument()
+      expect(covers.findCover).toHaveBeenCalledWith(base)
+      resolve('none')
+      expect(await within(section()).findByText('Kapak bulunamadı.')).toBeInTheDocument()
+      expect(within(section()).getByRole('button', { name: 'Kapağı yeniden bul' })).toBeInTheDocument()
+    })
+
+    it('own image and Kaldır call the cover actions', async () => {
+      const withCover = { ...base, cover: { source: 'itunes' as const, url: 'https://x/a.jpg' } }
+      const { covers } = withCovers(withCover)
+      openDrawer()
+      const file = new File(['img'], 'me.png', { type: 'image/png' })
+      fireEvent.change(within(section()).getByLabelText('Kendi resmini seç'), { target: { files: [file] } })
+      await waitFor(() => expect(covers.setUserCover).toHaveBeenCalledWith(withCover, file))
+      fireEvent.click(within(section()).getByRole('button', { name: 'Kaldır' }))
+      await waitFor(() => expect(covers.removeCover).toHaveBeenCalledWith(withCover))
+    })
+
+    it('a failed cover save shows the save error', async () => {
+      const { covers } = withCovers()
+      covers.setUserCover.mockRejectedValueOnce(new Error('disk'))
+      openDrawer()
+      fireEvent.change(within(section()).getByLabelText('Kendi resmini seç'), { target: { files: [new File(['x'], 'a.jpg')] } })
+      expect(await screen.findByText('Kaydedilemedi, tekrar dene.')).toBeInTheDocument()
+    })
+  })
 })

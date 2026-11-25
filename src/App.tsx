@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCovers } from './cover/useCovers'
 import { listRecordings } from './storage/repo'
 import { useLibrary } from './state/useLibrary'
 import { ensurePermission, getSavedHandle, pickFolder, saveHandle } from './storage/folderHandle'
@@ -34,6 +35,8 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
   const songs = lib.library.songs
   const selected = selectedSongId ? songs.find((s) => s.id === selectedSongId) : undefined
   useSongLight(selected ? selected.bpm : null)
+  // Backfill runs while the list is on screen; covers for new songs are searched right after adding.
+  const covers = useCovers(root, songs, lib.patchSong, { backfill: lib.status === 'ready' && !selected })
   useEffect(() => {
     if (lib.status !== 'ready') return
     let cancelled = false
@@ -70,9 +73,12 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
           library={lib.library}
           onOpen={setSelectedSongId}
           onAdd={async (input) => {
-            await lib.addSong(input)
+            const song = await lib.addSong(input)
+            // `once`: the backfill may already have picked the new song up.
+            void covers.findCover(song, { once: true }).catch(() => undefined)
           }}
           recordingCounts={recordingCounts}
+          root={root}
           onSettings={() => setSettingsOpen(true)}
         />
       </div>
@@ -83,6 +89,7 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
           root={root}
           patchSong={lib.patchSong}
           deleteSong={lib.deleteSong}
+          covers={covers}
           recordingsVersion={countsVersion}
           busy={recorderBusy}
           recorder={(drawerOpen) => (

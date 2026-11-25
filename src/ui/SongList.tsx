@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Library, SongStatus } from '../domain/types'
+import type { FsDir } from '../storage/fsDir'
+import CoverArt from './CoverArt'
 import SongForm, { type SongInput } from './SongForm'
 
 export type { SongInput }
@@ -11,6 +13,8 @@ interface Props {
   recordingCounts: Record<string, number>
   /** Opens the global settings dialog (⚙ in the header). */
   onSettings?: () => void
+  /** Library folder; when given, each row starts with the song's cover. */
+  root?: FsDir
 }
 
 const TABS: { status: SongStatus; label: string }[] = [
@@ -23,7 +27,7 @@ const matches = (text: string, query: string) =>
   text.toLocaleLowerCase('tr').includes(query.toLocaleLowerCase('tr')) ||
   text.toLowerCase().includes(query.toLowerCase())
 
-export default function SongList({ library, onOpen, onAdd, recordingCounts, onSettings }: Props) {
+export default function SongList({ library, onOpen, onAdd, recordingCounts, onSettings, root }: Props) {
   const [tab, setTab] = useState<SongStatus>('learning')
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
@@ -103,6 +107,7 @@ export default function SongList({ library, onOpen, onAdd, recordingCounts, onSe
         ) : (
           rows.map((s) => (
             <button key={s.id} className="song-row" onClick={() => onOpen(s.id)}>
+              {root && <CoverArt root={root} song={s} size={40} />}
               <span className="song-main">
                 <span className="song-title">{s.title}</span>
                 {s.artist && <span className="song-artist">{s.artist}</span>}

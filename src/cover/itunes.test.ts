@@ -79,3 +79,36 @@ describe('jsonp', () => {
     expect(name in window).toBe(false)
   })
 })
+
+describe('searchCover timeout', () => {
+  afterEach(() => vi.useRealTimers())
+  it('a hung fetch resolves null after 8 s and is aborted', async () => {
+    vi.useFakeTimers()
+    let signal: AbortSignal | undefined
+    const f = vi.fn((_u: string, init?: RequestInit) => {
+      signal = init?.signal ?? undefined
+      return new Promise<Response>(() => {})
+    })
+    const j = vi.fn()
+    let result: unknown = 'pending'
+    void searchCover('a', 'b', { fetch: f as unknown as typeof fetch, jsonp: j }).then((r) => (result = r))
+    await vi.advanceTimersByTimeAsync(7999)
+    expect(result).toBe('pending')
+    await vi.advanceTimersByTimeAsync(1)
+    expect(result).toBeNull()
+    expect(signal?.aborted).toBe(true)
+    expect(j).not.toHaveBeenCalled()
+  })
+  it('an aborted fetch does not fall back to jsonp', async () => {
+    vi.useFakeTimers()
+    const f = vi.fn(
+      (_u: string, init?: RequestInit) =>
+        new Promise<Response>((_, reject) => init?.signal?.addEventListener('abort', () => reject(new DOMException('a', 'AbortError')))),
+    )
+    const j = vi.fn()
+    const p = searchCover('a', 'b', { fetch: f as unknown as typeof fetch, jsonp: j })
+    await vi.advanceTimersByTimeAsync(8000)
+    expect(await p).toBeNull()
+    expect(j).not.toHaveBeenCalled()
+  })
+})

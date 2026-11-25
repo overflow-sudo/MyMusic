@@ -41,4 +41,15 @@ describe('cover storage', () => {
   it('removeCover is safe without folder', async () => {
     await expect(removeCover(createMemoryDir(), song())).resolves.toBeUndefined()
   })
+  it('writeCover resolves when removing a stray old cover fails after saving', async () => {
+    const root = createMemoryDir()
+    const s = song()
+    await writeCover(root, s, new Blob(['a']), 'png')
+    const dir = await songDir(root, s)
+    dir.remove = async () => {
+      throw new Error('locked')
+    }
+    await expect(writeCover(root, s, new Blob(['b']), 'jpg')).resolves.toBe('cover.jpg')
+    expect(await (await dir.readFile('cover.jpg'))?.text()).toBe('b')
+  })
 })

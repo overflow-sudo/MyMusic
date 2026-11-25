@@ -177,7 +177,7 @@ label.button {
 }
 .song-row:hover { background: transparent; border-color: var(--line); }
 .song-row:hover .song-title { color: #ffffff; }
-.song-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.song-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
 .song-title { font-size: 17px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .song-artist { font-size: 13px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .song-meta { color: var(--dim); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -200,6 +200,7 @@ h1 + .form { margin-top: 16px; }
 .song-head-bpm { font-family: var(--font-display); font-weight: 300; font-size: clamp(44px, 7vw, 72px); line-height: 0.9; letter-spacing: -0.02em; }
 .song-head-unit { font-size: 12px; letter-spacing: 0.14em; color: var(--dim); white-space: nowrap; }
 .song-head .gear { margin-top: 4px; margin-right: -8px; font-size: 20px; }
+.song-head:has(.cover-head) { grid-template-columns: auto auto minmax(0, 1fr) auto auto; }
 .recorder-slot { display: flex; flex-direction: column; }
 .song-recordings { display: flex; flex-direction: column; gap: 8px; }
 .song-recordings h2 { font-size: 13px; font-family: var(--font-body); font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); padding-bottom: 8px; border-bottom: 1px solid var(--line); }
@@ -245,6 +246,8 @@ button.danger-link:hover { color: #f0574e; text-decoration: underline; text-unde
   .song-head .back { grid-area: back; justify-self: start; }
   .song-head .gear { grid-area: gear; }
   .song-head-main { grid-area: main; }
+  .song-head:has(.cover-head) { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: 'back back gear' 'cover main main' 'tempo tempo tempo'; align-items: center; }
+  .song-head .cover-head { grid-area: cover; --cover-size: 64px !important; }
   .song-head-tempo { grid-area: tempo; flex-direction: row; align-items: baseline; gap: 12px; }
   .song-head-bpm { font-size: 48px; }
 }
@@ -393,3 +396,21 @@ button.danger-link:hover { color: #f0574e; text-decoration: underline; text-unde
 }
 .chord-sheet .chord-part { display: inline-flex; flex-direction: column; vertical-align: bottom; }
 .chord-sheet .chord-above { min-height: 1.5em; padding-right: 0.5ch; }
+
+/* ---------- Album covers ---------- */
+.cover-art {
+  --cover-size: 40px;
+  width: var(--cover-size); height: var(--cover-size); flex-shrink: 0;
+  display: inline-grid; place-items: center; overflow: hidden;
+  border-radius: 6px; background: hsl(var(--beat-h) 40% 18%);
+}
+.cover-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cover-letter {
+  font-family: var(--font-display); font-weight: 300; line-height: 1;
+  font-size: calc(var(--cover-size) * 0.46); color: hsl(var(--beat-h) 60% 82%);
+}
+.cover-head { border-radius: 10px; }
+.cover-panel { display: flex; gap: 16px; align-items: flex-start; }
+.cover-panel .cover-art { border-radius: 10px; }
+.cover-panel-actions { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.cover-status { font-size: 14px; }

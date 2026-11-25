@@ -3,6 +3,9 @@ import { validateSongInput } from '../domain/validate'
 import type { Song, SongStatus, Track } from '../domain/types'
 import type { FsDir } from '../storage/fsDir'
 import { importTrack, readTrack, removeTrack } from '../storage/repo'
+import type { CoverActions, FindResult } from '../cover/useCovers'
+import CoverArt from './CoverArt'
+import CoverPanel from './CoverPanel'
 import Drawer from './Drawer'
 import LightModeSegment from './LightModeSegment'
 import RecordingList from './RecordingList'
@@ -23,6 +26,8 @@ interface Props {
   recordingsVersion?: number
   /** A take is running: the settings gear is disabled so the take can't be hidden behind a dialog. */
   busy?: boolean
+  /** Cover search/storage; without it the song screen shows no cover. */
+  covers?: CoverActions
 }
 
 const STATUS: { value: SongStatus; label: string }[] = [
@@ -32,7 +37,7 @@ const STATUS: { value: SongStatus; label: string }[] = [
 // Status words are Turkish (ı → I, i → İ); artist names are often not ("Oasis" must not become "OASİS").
 const upperTr = (s: string) => s.toLocaleUpperCase('tr-TR')
 
-export default function SongDetail({ song, root, onBack, patchSong, deleteSong, recorder, drawerSlot, recordingsVersion = 0, busy = false }: Props) {
+export default function SongDetail({ song, root, onBack, patchSong, deleteSong, recorder, drawerSlot, recordingsVersion = 0, busy = false, covers }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [saveError, setSaveError] = useState(false)
@@ -93,6 +98,16 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
       setSaveError(true)
     }
   }
+  // Cover actions report a failed save the same way as every other drawer edit.
+  const guarded = async <T,>(op: () => Promise<T>): Promise<T | null> => {
+    setSaveError(false)
+    try {
+      return await op()
+    } catch {
+      setSaveError(true)
+      return null
+    }
+  }
   const doDelete = async () => {
     if (!window.confirm('Şarkı listeden kaldırılsın mı? Kayıt dosyaların klasörde kalır.')) return
     try {
@@ -114,6 +129,7 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
           <button type="button" className="icon-btn back" aria-label="Geri" onClick={onBack}>
             ‹
           </button>
+          {covers && <CoverArt root={root} song={song} size={96} className="cover-head" />}
           <div className="song-head-main">
             <h1 className="song-head-title">{song.title}</h1>
             <p className="song-head-meta">
@@ -169,6 +185,18 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
             <p className="note" role="alert">
               Kaydedilemedi, tekrar dene.
             </p>
+          )}
+          {covers && (
+            <section className="drawer-section">
+              <h3 className="drawer-label">Kapak</h3>
+              <CoverPanel
+                root={root}
+                song={song}
+                onFind={() => guarded<FindResult>(() => covers.findCover(song))}
+                onPick={async (file) => void (await guarded(() => covers.setUserCover(song, file)))}
+                onRemove={async () => void (await guarded(() => covers.removeCover(song)))}
+              />
+            </section>
           )}
           <section className="drawer-section">
             <h3 className="drawer-label">Durum</h3>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSong, emptyLibrary } from '../domain/library'
 import type { Library, SongStatus } from '../domain/types'
+import { createMemoryDir } from '../storage/memoryDir'
 import SongList, { type SongInput } from './SongList'
 
 afterEach(cleanup)
@@ -127,5 +128,17 @@ describe('SongList', () => {
     expect(await screen.findByText('Kaydedilemedi, tekrar dene.')).toBeInTheDocument()
     expect(screen.getByLabelText('Şarkı adı')).toHaveValue('Yeni')
     expect(onAdd).toHaveBeenCalledTimes(1)
+  })
+  it('each row starts with a 40 px cover when the folder is given', () => {
+    const songs = lib(mk('Wonderwall', 'Oasis', 'learning', 1), { ...mk('Yellow', 'Coldplay', 'learning', 2), cover: { source: 'itunes', url: 'https://x/y.jpg' } })
+    render(<SongList library={songs} onOpen={() => {}} onAdd={() => {}} recordingCounts={{}} root={createMemoryDir()} />)
+    const rows = screen.getAllByRole('button', { name: /Wonderwall|Yellow/ })
+    expect(rows).toHaveLength(2)
+    for (const row of rows) {
+      expect(row.firstElementChild).toHaveClass('cover-art')
+      expect(row.firstElementChild).toHaveStyle({ '--cover-size': '40px' })
+    }
+    expect(rows[0]).toHaveAccessibleName(/^Wonderwall/)
+    expect(rows[1].querySelector('img')).toHaveAttribute('src', 'https://x/y.jpg')
   })
 })
