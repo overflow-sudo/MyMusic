@@ -17,7 +17,7 @@ afterEach(() => {
 })
 
 const base = createSong({ title: 'Wonderwall', artist: 'Oasis', status: 'learning', bpm: 87, countInBeats: 4 }, new Date(), 's1')
-const SHEET = '[Verse]\nEm7   G   Dsus4   A7sus4\nToday is gonna be the day'
+const SHEET = '[Verse]\nEm7   G   Dsus4   A7sus4\nLa la lo ma la'
 
 function setup(opts: { song?: Song; fail?: boolean } = {}) {
   const patches: Partial<Song>[] = []
@@ -104,6 +104,12 @@ describe('chords next to the stage', () => {
     expect(within(aside).getByText('Dsus4')).toHaveClass('chord')
     expect(aside.parentElement).toBe(screen.getByTestId('rec').closest('.recorder-slot')!.parentElement)
     expect(aside.parentElement).toHaveClass('has-chords')
+  })
+
+  it('the chords scroller is keyboard-focusable and the aside keeps its label', () => {
+    setup({ song: { ...base, chords: SHEET } })
+    const aside = screen.getByRole('complementary', { name: 'Akorlar' })
+    expect(aside.querySelector('.chords-panel-scroll')).toHaveAttribute('tabindex', '0')
   })
 
   it('a song without chords has no chords panel', () => {

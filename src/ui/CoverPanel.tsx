@@ -8,7 +8,7 @@ interface Props {
   root: FsDir
   song: Song
   onFind: () => Promise<FindResult | null>
-  onPick: (file: File) => Promise<void>
+  onPick: (file: File) => Promise<'saved' | 'unsupported' | null | void>
   onRemove: () => Promise<void>
 }
 
@@ -17,11 +17,13 @@ export default function CoverPanel({ root, song, onFind, onPick, onRemove }: Pro
   const input = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [notFound, setNotFound] = useState(false)
+  const [unsupported, setUnsupported] = useState(false)
 
   const find = async () => {
     if (busy) return
     setBusy(true)
     setNotFound(false)
+    setUnsupported(false)
     try {
       setNotFound((await onFind()) === 'none')
     } finally {
@@ -33,7 +35,8 @@ export default function CoverPanel({ root, song, onFind, onPick, onRemove }: Pro
     e.target.value = ''
     if (!file) return
     setNotFound(false)
-    void onPick(file)
+    setUnsupported(false)
+    void onPick(file).then((r) => setUnsupported(r === 'unsupported'))
   }
 
   return (
@@ -56,7 +59,7 @@ export default function CoverPanel({ root, song, onFind, onPick, onRemove }: Pro
         </div>
         {/* Always present (empty until needed) so screen readers announce the text when it appears. */}
         <p className="dim cover-status" role="status">
-          {notFound ? 'Kapak bulunamadı.' : ''}
+          {unsupported ? 'Bu resim biçimi desteklenmiyor.' : notFound ? 'Kapak bulunamadı.' : ''}
         </p>
       </div>
     </div>

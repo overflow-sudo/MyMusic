@@ -45,7 +45,7 @@ export default function CoverArt({ root, song, size, className }: Props) {
   return (
     <span className={className ? `cover-art ${className}` : 'cover-art'} style={style}>
       {src ? (
-        <img src={src} alt="" onError={() => setFailedSrc(src)} />
+        <img src={src} alt="" referrerPolicy="no-referrer" onError={() => setFailedSrc(src)} />
       ) : (
         <span className="cover-letter" aria-hidden="true">
           {letter}

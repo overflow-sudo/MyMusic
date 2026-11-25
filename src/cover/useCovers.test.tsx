@@ -22,7 +22,7 @@ function deferred<T>() {
 const hit: CoverHit = { artworkUrl: 'https://x/600x600bb.jpg' }
 const jpeg = () => new Blob(['img'], { type: 'image/jpeg' })
 
-function setup(initial: Song[], opts: { search?: (t: string, a: string) => Promise<CoverHit | null>; download?: (u: string) => Promise<Blob | null>; backfill?: boolean } = {}) {
+function setup(initial: Song[], opts: { search?: (t: string, a: string) => Promise<CoverHit | null>; download?: (u: string) => Promise<Blob | null>; backfill?: boolean; failPatch?: boolean } = {}) {
   const root = createMemoryDir()
   const search = vi.fn(opts.search ?? (async () => hit))
   const download = vi.fn(opts.download ?? (async () => jpeg()))
@@ -31,6 +31,7 @@ function setup(initial: Song[], opts: { search?: (t: string, a: string) => Promi
     ({ backfill }) => {
       const [songs, setSongs] = useState(initial)
       const patchSong = useCallback(async (id: string, patch: Partial<Song>) => {
+        if (opts.failPatch) throw new Error('disk')
         patches.push({ id, patch })
         setSongs((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)))
       }, [])
@@ -179,7 +180,7 @@ describe('useCovers', () => {
     const { view, patches } = setup([s])
     await act(async () => void (await view.result.current.covers.findCover(s)))
     expect(patches.at(-1)).toEqual({ id: 's1', patch: { cover: { source: 'itunes', fileName: 'cover.jpg' } } })
-    await act(async () => view.result.current.covers.setUserCover(view.result.current.songs[0], new File(['m'], 'a.png')))
+    await act(async () => view.result.current.covers.setUserCover(view.result.current.songs[0], new File(['m'], 'a.png', { type: 'image/png' })))
     expect(patches.at(-1)).toEqual({ id: 's1', patch: { cover: { source: 'user', fileName: 'cover.png' } } })
   })
 
@@ -216,5 +217,64 @@ describe('useCovers', () => {
     const patchSong = async () => {}
     renderHook(() => useCovers(root, songs, patchSong, { backfill: true, search }), { reactStrictMode: true })
     await waitFor(() => expect(search).toHaveBeenCalledTimes(1))
+  })
+
+  it('backfill stops starting finds while backfill is false (a song is open) and resumes when it is true again', async () => {
+    const songs = [1, 2, 3, 4].map((n) => mk(n))
+    const gates: ReturnType<typeof deferred<CoverHit | null>>[] = []
+    const { view, search } = setup(songs, {
+      backfill: true,
+      search: () => {
+        const d = deferred<CoverHit | null>()
+        gates.push(d)
+        return d.promise
+      },
+    })
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(2))
+    view.rerender({ backfill: false })
+    await act(async () => gates.splice(0).forEach((g) => g.resolve(null)))
+    await act(async () => {})
+    expect(search).toHaveBeenCalledTimes(2)
+    view.rerender({ backfill: true })
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(4))
+    await act(async () => gates.splice(0).forEach((g) => g.resolve(null)))
+  })
+
+  it('a failing patch keeps the old cover file and removes the newly written one', async () => {
+    const s = { ...mk(1), cover: { source: 'user' as const, fileName: 'cover.png' } }
+    const { root, view } = setup([s], { failPatch: true })
+    const dir = await songDir(root, s)
+    await dir.writeFile('cover.png', new Blob(['old']))
+    await act(async () => {
+      await expect(view.result.current.covers.findCover(s)).rejects.toThrow('disk')
+    })
+    expect((await dir.list()).map((e) => e.name)).toEqual(['cover.png'])
+    expect(await (await dir.readFile('cover.png'))?.text()).toBe('old')
+  })
+
+  it('stray old covers are deleted only after the patch succeeds', async () => {
+    const s = { ...mk(1), cover: { source: 'user' as const, fileName: 'cover.png' } }
+    const { root, view } = setup([s])
+    const dir = await songDir(root, s)
+    await dir.writeFile('cover.png', new Blob(['old']))
+    await act(async () => void (await view.result.current.covers.findCover(s)))
+    expect((await dir.list()).map((e) => e.name)).toEqual(['cover.jpg'])
+  })
+
+  it.each([
+    ['notes.txt', 'text/plain'],
+    ['a.svg', 'image/svg+xml'],
+    ['a.heic', 'image/heic'],
+    ['a.png', ''],
+  ])('setUserCover refuses %s (%s): nothing written, nothing patched', async (name, type) => {
+    const s = mk(1)
+    const { root, view, patches } = setup([s])
+    let r: string | void = undefined
+    await act(async () => {
+      r = await view.result.current.covers.setUserCover(s, new File(['x'], name, { type }))
+    })
+    expect(r).toBe('unsupported')
+    expect(patches).toEqual([])
+    expect((await (await songDir(root, s)).list()).map((e) => e.name)).toEqual([])
   })
 })

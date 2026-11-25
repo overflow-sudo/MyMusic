@@ -36,7 +36,12 @@ export function jsonp(url: string, timeoutMs: number = TIMEOUT_MS): Promise<unkn
     }
     w[name] = (payload: unknown) => { cleanup(); resolve(payload) }
     script.onerror = () => { cleanup(); reject(new Error('jsonp error')) }
-    timer = setTimeout(() => { cleanup(); reject(new Error('jsonp timeout')) }, timeoutMs)
+    timer = setTimeout(() => {
+      cleanup()
+      // A no-op stays behind: a script that arrives late would otherwise throw a ReferenceError.
+      w[name] = () => {}
+      reject(new Error('jsonp timeout'))
+    }, timeoutMs)
     script.src = `${url}${url.includes('?') ? '&' : '?'}callback=${name}`
     document.head.appendChild(script)
   })

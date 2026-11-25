@@ -44,6 +44,7 @@ describe('CoverArt', () => {
     const remote = { ...song, cover: { source: 'itunes' as const, url: 'https://x/600x600bb.jpg' } }
     const { container, rerender } = render(<CoverArt root={createMemoryDir()} song={remote} size={96} />)
     expect(container.querySelector('img')).toHaveAttribute('src', 'https://x/600x600bb.jpg')
+    expect(container.querySelector('img')).toHaveAttribute('referrerpolicy', 'no-referrer')
     rerender(<CoverArt root={createMemoryDir()} song={{ ...remote, cover: undefined }} size={96} />)
     expect(container.querySelector('img')).toBeNull()
     rerender(<CoverArt root={createMemoryDir()} song={{ ...remote, cover: { source: 'none' } }} size={96} />)

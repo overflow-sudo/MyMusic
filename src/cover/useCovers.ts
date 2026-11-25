@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { Cover, Song } from '../domain/types'
 import type { FsDir } from '../storage/fsDir'
-import { downloadImage, removeCover as removeCoverFiles, writeCover } from '../storage/cover'
+import { cleanupStrayCovers, discardNewCover, downloadImage, removeCover as removeCoverFiles, writeCover } from '../storage/cover'
 import { searchCover, type CoverHit } from './itunes'
 
 export type FindResult = 'found' | 'none'
@@ -12,7 +12,8 @@ export interface CoverActions {
    * With `once`, a song (id + title + artist) already searched this session is not searched again.
    */
   findCover(song: Song, opts?: { once?: boolean }): Promise<FindResult>
-  setUserCover(song: Song, file: File): Promise<void>
+  /** Resolves 'unsupported' (and writes nothing) for a file that isn't a usable raster image. */
+  setUserCover(song: Song, file: File): Promise<'saved' | 'unsupported'>
   removeCover(song: Song): Promise<void>
 }
 
@@ -28,6 +29,8 @@ const MAX_CONCURRENT = 2
 const keyOf = (s: Song) => `${s.id}|${s.title}|${s.artist}`
 const sameCover = (a: Cover | undefined, b: Cover | undefined) =>
   a === b || (!!a && !!b && a.source === b.source && a.fileName === b.fileName && a.url === b.url)
+const UNSUPPORTED_TYPES = new Set(['image/svg+xml', 'image/heic'])
+const supportedImage = (file: File) => file.type.startsWith('image/') && !UNSUPPORTED_TYPES.has(file.type)
 const extOf = (file: File) => {
   const dot = file.name.lastIndexOf('.')
   return dot > 0 ? file.name.slice(dot + 1) : (file.type.split('/')[1] ?? 'jpg')
@@ -41,9 +44,11 @@ export function useCovers(
 ): CoverActions {
   const songsRef = useRef(songs)
   const deps = useRef({ root, patchSong, search, download })
+  const backfillRef = useRef(backfill)
   // Declared first so it runs before the backfill effect below.
   useEffect(() => {
     songsRef.current = songs
+    backfillRef.current = backfill
     deps.current = { root, patchSong, search, download }
   })
 
@@ -94,13 +99,19 @@ export function useCovers(
           if (stale()) return 'found'
           const { root, patchSong } = deps.current
           // Checked again right before writing (inside the serial lock), so a user's own file is never replaced.
-          const cover: Cover = blob
-            ? { source: 'itunes', fileName: await writeCover(root, song, blob, 'jpg') }
-            : { source: 'itunes', url: hit.artworkUrl }
+          const written = blob ? await writeCover(root, song, blob, 'jpg', { cleanup: false }) : null
+          const cover: Cover = written ? { source: 'itunes', fileName: written } : { source: 'itunes', url: hit.artworkUrl }
           // Only a deleted song can turn stale while writing (cover edits wait for the lock); its folder keeps the file.
           if (stale()) return 'found'
           bump(song.id)
-          await patchSong(song.id, { cover })
+          try {
+            await patchSong(song.id, { cover })
+          } catch (e) {
+            // Keep showing the old cover: drop the new file instead of the old one.
+            if (written) await discardNewCover(root, song, written, startCover)
+            throw e
+          }
+          if (written) await cleanupStrayCovers(root, song, written)
           return 'found'
         })
       })()
@@ -118,11 +129,19 @@ export function useCovers(
 
   const setUserCover = useCallback(
     (song: Song, file: File) =>
-      serial(async () => {
+      serial(async (): Promise<'saved' | 'unsupported'> => {
+        if (!supportedImage(file)) return 'unsupported'
         const { root, patchSong } = deps.current
         bump(song.id)
-        const fileName = await writeCover(root, song, file, extOf(file))
-        await patchSong(song.id, { cover: { source: 'user', fileName } })
+        const fileName = await writeCover(root, song, file, extOf(file), { cleanup: false })
+        try {
+          await patchSong(song.id, { cover: { source: 'user', fileName } })
+        } catch (e) {
+          await discardNewCover(root, song, fileName, latest(song.id)?.cover ?? song.cover)
+          throw e
+        }
+        await cleanupStrayCovers(root, song, fileName)
+        return 'saved'
       }),
     [serial],
   )
@@ -143,7 +162,7 @@ export function useCovers(
   )
 
   const pump = useCallback(function pump() {
-    while (alive.current && running.current < MAX_CONCURRENT && queue.current.length > 0) {
+    while (alive.current && backfillRef.current && running.current < MAX_CONCURRENT && queue.current.length > 0) {
       const song = latest(queue.current.shift()!)
       if (!song || song.cover || attempted.current.has(keyOf(song))) continue
       running.current++

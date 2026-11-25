@@ -68,6 +68,17 @@ describe('jsonp', () => {
     expect(document.querySelector('script')).toBeNull()
     expect(name in window).toBe(false)
   })
+  it('a script finishing after the timeout calls a harmless no-op instead of throwing', async () => {
+    vi.useFakeTimers()
+    const p = jsonp('https://itunes.apple.com/search?term=a', 8000)
+    const assertion = expect(p).rejects.toThrow()
+    const name = cbName()
+    await vi.advanceTimersByTimeAsync(8000)
+    await assertion
+    const late = (window as unknown as Record<string, unknown>)[name]
+    expect(typeof late).toBe('function')
+    expect(() => (late as (v: unknown) => void)({ results: [] })).not.toThrow()
+  })
   it('rejects on timeout and cleans up', async () => {
     vi.useFakeTimers()
     const p = jsonp('https://itunes.apple.com/search?term=a', 8000)
@@ -76,7 +87,8 @@ describe('jsonp', () => {
     await vi.advanceTimersByTimeAsync(8000)
     await assertion
     expect(document.querySelector('script')).toBeNull()
-    expect(name in window).toBe(false)
+    // Left as a harmless no-op (not deleted) so a late script can't throw; see the test above.
+    expect(typeof (window as unknown as Record<string, unknown>)[name]).toBe('function')
   })
 })
 

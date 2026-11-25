@@ -166,7 +166,7 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
           {recorder && <div className="recorder-slot">{typeof recorder === 'function' ? recorder(drawerOpen) : recorder}</div>}
           {hasChords && (
             <aside className="chords-panel" aria-label="Akorlar">
-              <div className="chords-panel-scroll">
+              <div className="chords-panel-scroll" tabIndex={0}>
                 <ChordSheet text={song.chords!} size="lg" />
               </div>
             </aside>
@@ -206,7 +206,7 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
                 root={root}
                 song={song}
                 onFind={() => guarded<FindResult>(() => covers.findCover(song))}
-                onPick={async (file) => void (await guarded(() => covers.setUserCover(song, file)))}
+                onPick={(file) => guarded(() => covers.setUserCover(song, file))}
                 onRemove={async () => void (await guarded(() => covers.removeCover(song)))}
               />
             </section>

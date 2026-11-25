@@ -390,7 +390,7 @@ describe('SongDetail layout and settings drawer', () => {
       let resolveFind: (r: 'found' | 'none') => void = () => {}
       const covers = {
         findCover: vi.fn(() => new Promise<'found' | 'none'>((r) => (resolveFind = r))),
-        setUserCover: vi.fn(async () => {}),
+        setUserCover: vi.fn(async (): Promise<'saved' | 'unsupported'> => 'saved'),
         removeCover: vi.fn(async () => {}),
       }
       const view = render(
@@ -452,6 +452,14 @@ describe('SongDetail layout and settings drawer', () => {
       resolve('none')
       await waitFor(() => expect(status).toHaveTextContent('Kapak bulunamadı.'))
       expect(within(section()).getByRole('status')).toBe(status)
+    })
+
+    it("an unsupported own image shows 'Bu resim biçimi desteklenmiyor.' in the Kapak status line", async () => {
+      const { covers } = withCovers()
+      covers.setUserCover.mockResolvedValueOnce('unsupported')
+      openDrawer()
+      fireEvent.change(within(section()).getByLabelText('Kendi resmini seç'), { target: { files: [new File(['x'], 'a.heic', { type: 'image/heic' })] } })
+      expect(await within(section()).findByRole('status')).toHaveTextContent('Bu resim biçimi desteklenmiyor.')
     })
 
     it('a failed cover save shows the save error', async () => {
