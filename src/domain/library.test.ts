@@ -87,3 +87,26 @@ describe('songs', () => {
     expect(removeSong({ ...emptyLibrary(), songs: [a] }, 'aaaa-1').songs).toEqual([])
   })
 })
+
+describe('cover and chords fields', () => {
+  const base = { id: 'a', title: 'T', artist: 'A', status: 'known', bpm: 90, folderName: 'f', createdAt: '', updatedAt: '' }
+  const parse = (extra: Record<string, unknown>) => {
+    const r = parseLibrary(JSON.stringify({ version: 1, songs: [{ ...base, ...extra }] }))
+    if (!r.ok) throw new Error(r.error)
+    return r.library.songs[0]
+  }
+  it('round-trips valid cover and chords', () => {
+    const s = parse({ cover: { source: 'itunes', fileName: 'cover.jpg', url: 'https://x' }, chords: 'Am G' })
+    expect(s.cover).toEqual({ source: 'itunes', fileName: 'cover.jpg', url: 'https://x' })
+    expect(s.chords).toBe('Am G')
+  })
+  it('drops invalid chords but keeps song', () => {
+    const s = parse({ chords: 5 })
+    expect('chords' in s).toBe(false)
+    expect(s.id).toBe('a')
+  })
+  it('drops invalid cover shapes', () => {
+    for (const cover of ['x', null, [], { source: 'bad', fileName: 'a' }, { source: 'user' }, { source: 'user', fileName: 3 }])
+      expect('cover' in parse({ cover })).toBe(false)
+  })
+})

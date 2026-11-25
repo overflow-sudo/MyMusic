@@ -8,6 +8,10 @@ export function emptyLibrary(): Library {
 const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 
+const validCover = (c: unknown): boolean =>
+  isObject(c) && (c.source === 'itunes' || c.source === 'user') &&
+  (typeof c.fileName === 'string' || typeof c.url === 'string')
+
 export function parseLibrary(
   text: string | null,
 ): { ok: true; library: Library } | { ok: false; error: string } {
@@ -24,6 +28,8 @@ export function parseLibrary(
   const songs = ((raw.songs ?? []) as unknown[]).map((s) => {
     if (!isObject(s)) return null
     const song: Record<string, unknown> = { ...s, countInBeats: s.countInBeats === undefined ? 4 : s.countInBeats }
+    if (song.cover !== undefined && !validCover(song.cover)) delete song.cover
+    if (song.chords !== undefined && typeof song.chords !== 'string') delete song.chords
     const ok =
       typeof song.id === 'string' && typeof song.title === 'string' && typeof song.folderName === 'string' &&
       typeof song.bpm === 'number' && typeof song.countInBeats === 'number'
