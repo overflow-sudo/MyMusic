@@ -48,17 +48,16 @@ export default function CoverPanel({ root, song, onFind, onPick, onRemove }: Pro
             Kendi resmini seç
           </button>
           <input ref={input} type="file" accept="image/*" aria-label="Kendi resmini seç" onChange={pick} hidden />
-          {song.cover && (
+          {song.cover && song.cover.source !== 'none' && (
             <button type="button" className="btn btn-ghost" onClick={() => void onRemove()}>
               Kaldır
             </button>
           )}
         </div>
-        {notFound && (
-          <p className="dim cover-status" role="status">
-            Kapak bulunamadı.
-          </p>
-        )}
+        {/* Always present (empty until needed) so screen readers announce the text when it appears. */}
+        <p className="dim cover-status" role="status">
+          {notFound ? 'Kapak bulunamadı.' : ''}
+        </p>
       </div>
     </div>
   )

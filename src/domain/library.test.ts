@@ -100,6 +100,12 @@ describe('cover and chords fields', () => {
     expect(s.cover).toEqual({ source: 'itunes', fileName: 'cover.jpg', url: 'https://x' })
     expect(s.chords).toBe('Am G')
   })
+  it("round-trips a cover removed on purpose ({ source: 'none' })", () => {
+    const s = parse({ cover: { source: 'none' } })
+    expect(s.cover).toEqual({ source: 'none' })
+    const again = parseLibrary(serializeLibrary({ version: 1, settings: { latencyCompensationMs: null }, songs: [s] }))
+    expect(again.ok && again.library.songs[0].cover).toEqual({ source: 'none' })
+  })
   it('drops invalid chords but keeps song', () => {
     const s = parse({ chords: 5 })
     expect('chords' in s).toBe(false)

@@ -9,8 +9,9 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 
 const validCover = (c: unknown): boolean =>
-  isObject(c) && (c.source === 'itunes' || c.source === 'user') &&
-  (typeof c.fileName === 'string' || typeof c.url === 'string')
+  isObject(c) &&
+  (c.source === 'none' ||
+    ((c.source === 'itunes' || c.source === 'user') && (typeof c.fileName === 'string' || typeof c.url === 'string')))
 
 export function parseLibrary(
   text: string | null,

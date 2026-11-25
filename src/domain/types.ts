@@ -1,6 +1,7 @@
 export type SongStatus = 'known' | 'learning'
 export interface Track { fileName: string; startSec: number; volume: number }
-export interface Cover { source: 'itunes' | 'user'; fileName?: string; url?: string }
+/** `source: 'none'` = removed on purpose: no file/url, and the backfill leaves it alone. */
+export interface Cover { source: 'itunes' | 'user' | 'none'; fileName?: string; url?: string }
 export interface Song {
   id: string; title: string; artist: string; status: SongStatus
   bpm: number; countInBeats: number; track?: Track

@@ -75,6 +75,8 @@ export function useCovers(
       if (existing) return existing
       if (opts?.once && attempted.current.has(key)) return Promise.resolve(results.current.get(key) ?? 'none')
       attempted.current.add(key)
+      // Right after addSong the hook hasn't re-rendered with the new song yet; without this it would look deleted.
+      if (!latest(song.id)) songsRef.current = [...songsRef.current, song]
       const known = latest(song.id)
       const startCover = known ? known.cover : song.cover
       const startVersion = versions.current.get(song.id) ?? 0
@@ -132,9 +134,10 @@ export function useCovers(
         bump(song.id)
         // Removed on purpose: the backfill must not bring it straight back this session.
         attempted.current.add(keyOf(song))
-        // Patch first: if it fails the song still points at an existing file; a leftover file is harmless.
-        await patchSong(song.id, { cover: undefined })
-        await removeCoverFiles(root, song)
+        // Patch first: if it fails the song still points at an existing file. 'none' keeps the backfill away for good.
+        await patchSong(song.id, { cover: { source: 'none' } })
+        // The cover is already gone from the song; a leftover file is never shown, so don't fail over it.
+        await removeCoverFiles(root, song).catch(() => undefined)
       }),
     [serial],
   )
@@ -154,6 +157,8 @@ export function useCovers(
   }, [findCover])
 
   useEffect(() => {
+    // Set here too: under StrictMode the alive effect's cleanup runs before this effect re-runs.
+    alive.current = true
     if (!backfill) return
     for (const s of songs) {
       const key = keyOf(s)

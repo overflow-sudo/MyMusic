@@ -442,6 +442,18 @@ describe('SongDetail layout and settings drawer', () => {
       await waitFor(() => expect(covers.removeCover).toHaveBeenCalledWith(withCover))
     })
 
+    it("'Kapak bulunamadı.' lives in an always-present status region; no Kaldır for a removed cover", async () => {
+      const { resolve } = withCovers({ ...base, cover: { source: 'none' } })
+      openDrawer()
+      const status = within(section()).getByRole('status')
+      expect(status).toBeEmptyDOMElement()
+      expect(within(section()).queryByRole('button', { name: 'Kaldır' })).toBeNull()
+      fireEvent.click(within(section()).getByRole('button', { name: 'Kapağı yeniden bul' }))
+      resolve('none')
+      await waitFor(() => expect(status).toHaveTextContent('Kapak bulunamadı.'))
+      expect(within(section()).getByRole('status')).toBe(status)
+    })
+
     it('a failed cover save shows the save error', async () => {
       const { covers } = withCovers()
       covers.setUserCover.mockRejectedValueOnce(new Error('disk'))

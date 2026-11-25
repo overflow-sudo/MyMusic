@@ -156,14 +156,65 @@ describe('useCovers', () => {
     expect(patches).toEqual([])
   })
 
-  it('removeCover deletes the file and clears the field, and backfill does not bring it back', async () => {
+  it("removeCover deletes the file and patches { source: 'none' }, and backfill does not bring it back", async () => {
     const s = { ...mk(1), cover: { source: 'itunes' as const, fileName: 'cover.jpg' } }
     const { root, view, patches, search } = setup([s], { backfill: true })
     await (await songDir(root, s)).writeFile('cover.jpg', jpeg())
     await act(async () => view.result.current.covers.removeCover(s))
-    expect(patches).toEqual([{ id: 's1', patch: { cover: undefined } }])
+    expect(patches).toEqual([{ id: 's1', patch: { cover: { source: 'none' } } }])
     expect((await (await songDir(root, s)).list()).map((e) => e.name)).toEqual([])
     await act(async () => {})
     expect(search).not.toHaveBeenCalled()
+  })
+
+  it("backfill never searches a song whose cover was removed on purpose (next session too)", async () => {
+    const s = { ...mk(1), cover: { source: 'none' as const } }
+    const { search } = setup([s, mk(2)], { backfill: true })
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(1))
+    expect(search).toHaveBeenCalledWith('Song 2', 'Band')
+  })
+
+  it("re-find and own image still work from the 'none' state", async () => {
+    const s = { ...mk(1), cover: { source: 'none' as const } }
+    const { view, patches } = setup([s])
+    await act(async () => void (await view.result.current.covers.findCover(s)))
+    expect(patches.at(-1)).toEqual({ id: 's1', patch: { cover: { source: 'itunes', fileName: 'cover.jpg' } } })
+    await act(async () => view.result.current.covers.setUserCover(view.result.current.songs[0], new File(['m'], 'a.png')))
+    expect(patches.at(-1)).toEqual({ id: 's1', patch: { cover: { source: 'user', fileName: 'cover.png' } } })
+  })
+
+  it('removeCover resolves when deleting the file fails after the patch', async () => {
+    const s = { ...mk(1), cover: { source: 'itunes' as const, fileName: 'cover.jpg' } }
+    const { root, view, patches } = setup([s])
+    const dir = await songDir(root, s)
+    await dir.writeFile('cover.jpg', jpeg())
+    dir.remove = async () => {
+      throw new Error('locked')
+    }
+    await act(async () => expect(view.result.current.covers.removeCover(s)).resolves.toBeUndefined())
+    expect(patches).toEqual([{ id: 's1', patch: { cover: { source: 'none' } } }])
+  })
+
+  it('a find started right after adding (before React re-renders) is not dropped as stale', async () => {
+    const s = mk(1)
+    const { view, patches } = setup([])
+    // Library state already has the song, but this hook hasn't rendered with it yet.
+    let r: string | undefined
+    await act(async () => {
+      const p = view.result.current.covers.findCover(s)
+      view.result.current.setSongs([s])
+      r = await p
+    })
+    expect(r).toBe('found')
+    expect(patches).toEqual([{ id: 's1', patch: { cover: { source: 'itunes', fileName: 'cover.jpg' } } }])
+  })
+
+  it('backfill still runs after a StrictMode-style effect remount', async () => {
+    const songs = [mk(1)]
+    const root = createMemoryDir()
+    const search = vi.fn(async () => null)
+    const patchSong = async () => {}
+    renderHook(() => useCovers(root, songs, patchSong, { backfill: true, search }), { reactStrictMode: true })
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(1))
   })
 })

@@ -414,3 +414,4 @@ button.danger-link:hover { color: #f0574e; text-decoration: underline; text-unde
 .cover-panel .cover-art { border-radius: 10px; }
 .cover-panel-actions { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .cover-status { font-size: 14px; }
+.cover-status:empty { margin-top: -10px; } /* kept in the tree as a live region, without adding a gap */
