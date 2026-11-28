@@ -106,4 +106,11 @@ describe('syncLibraryOnce', () => {
     await h.run()
     expect(h.api.putSong).not.toHaveBeenCalled()
   })
+
+  it('a local hashed track the server has no track for is not re-put every pass', async () => {
+    const h = harness([song('a', T1, { track: { fileName: 't.mp3', startSec: 0, volume: 1, hash: 'h' } })], [song('a', T1)])
+    await h.run()
+    await h.run()
+    expect(h.api.putSong).not.toHaveBeenCalled()
+  })
 })

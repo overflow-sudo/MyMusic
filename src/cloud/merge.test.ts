@@ -128,4 +128,9 @@ describe('mergeLibraries', () => {
     const remote = song('a', T1, { deletedAt: T1, track: { fileName: 't.mp3', startSec: 0, volume: 1 } })
     expect(mergeLibraries([local], [remote]).toPush).toEqual([])
   })
+
+  it('equal updatedAt: a local hashed track is not pushed when the server has no track (server never adopts one)', () => {
+    const local = song('a', T1, { track: { fileName: 't.mp3', startSec: 0, volume: 1, hash: 'h' } })
+    expect(mergeLibraries([local], [song('a', T1)]).toPush).toEqual([])
+  })
 })

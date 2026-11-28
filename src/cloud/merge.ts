@@ -31,7 +31,7 @@ function serverCanFill(merged: Song, remote: Song): boolean {
   if (mc?.hash && rc && !rc.hash && mc.source === rc.source && mc.fileName === rc.fileName) return true
   const mt = merged.track
   const rt = remote.track
-  return !!mt?.hash && !rt?.hash && (!rt || rt.fileName === mt.fileName)
+  return !!mt?.hash && !!rt && !rt.hash && rt.fileName === mt.fileName
 }
 
 function decide(local: Song | undefined, remote: Song | undefined): { song: Song | undefined; push: boolean } {
