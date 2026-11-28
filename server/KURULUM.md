@@ -1,10 +1,10 @@
 # MyMusic sunucu kurulumu (Docker + Caddy)
 
-Adres: `music.emiraksu.me`. Sunucu Docker içinde `127.0.0.1:8120` üzerinde çalışır, dışarıya senin mevcut Caddy'n açar. Komutları sırayla yapıştır.
+Adres: `music.emiraksu.me`. Sunucu Docker içinde `127.0.0.1:8120` üzerinde çalışır, dışarıya senin mevcut Caddy'n açar. Komutları sırayla yapıştır. `docker` komutları için `sudo` gerekebilir (kullanıcın `docker` grubunda değilse `docker compose ...` yerine `sudo docker compose ...` yaz).
 
 ## 1. DNS
 
-Alan adının DNS panelinde `music` için bir kayıt olsun: sunucunun IP'sine `A` (varsa `AAAA`) ya da ana alana `CNAME`. Cloudflare kullanıyorsan proxy açık (turuncu bulut) da kapalı (gri bulut) da çalışır; yüklemeler 32 MB'lık parçalarla gittiği için Cloudflare sınırına takılmaz.
+Alan adının DNS panelinde `music` için bir kayıt olsun: sunucunun IP'sine `A` (varsa `AAAA`) ya da ana alana `CNAME`. Cloudflare kullanıyorsan proxy açık (turuncu bulut) da kapalı (gri bulut) da çalışır; yüklemeler 32 MB'lık parçalarla gittiği için Cloudflare sınırına takılmaz. Proxy açıksa Cloudflare'de **SSL/TLS modu Full veya Full (strict)** olmalı ("Flexible" yönlendirme döngüsü yapar). Ayrıca proxy arkasında yanlış şifre sınırı (15 dakikada 10 deneme) Cloudflare'in uç IP'si başına sayılır; kabul edilebilir bir durum.
 
 ## 2. Repoyu klonla
 
@@ -23,7 +23,7 @@ chmod 600 .env
 nano .env
 ```
 
-`nano` içinde `OWNER_PASSWORD=` satırına **güçlü bir şifre** yaz (uygulamada bunu gireceksin; `openssl rand -base64 24` ile üretebilirsin). `SIGNING_SECRET` az önce otomatik dolduruldu. `PUBLIC_URL` doğruysa dokunma. Kaydet: Ctrl+O, Enter, Ctrl+X.
+`nano` içinde `OWNER_PASSWORD=` satırına **güçlü bir şifre** yaz (en az 12 karakter; `change-me` yer tutucusu ile sunucu başlamaz). `openssl rand -base64 24` ile üretebilirsin; uygulamada bunu gireceksin. Değerde `$` ve ` #` (boşluk + diyez) kullanma, `.env` dosyasında sorun çıkarır. `SIGNING_SECRET` az önce otomatik dolduruldu. `PUBLIC_URL` doğruysa dokunma. Kaydet: Ctrl+O, Enter, Ctrl+X.
 
 ## 4. Veri klasörü
 
@@ -34,6 +34,12 @@ mkdir -p data && sudo chown 10001:10001 data
 ```
 
 ## 5. Başlat
+
+Önce şifrenin ayarlandığını kontrol et (`change-me` görmemelisin):
+
+```bash
+grep OWNER_PASSWORD .env
+```
 
 ```bash
 docker compose up -d --build
@@ -57,7 +63,7 @@ sudo cp /opt/mymusic/server/mymusic.caddy /etc/caddy/projects/mymusic.caddy
 grep -n "import" /etc/caddy/Caddyfile
 ```
 
-Çıktıda `import /etc/caddy/projects/*` satırı yoksa ekle:
+Caddyfile `/etc/caddy/projects/` klasörünü zaten herhangi bir biçimde import ediyorsa (ör. `import projects/*`, `import /etc/caddy/projects/*.caddy`) ekleme yapma, bu adımı atla. Yoksa ekle:
 
 ```bash
 echo 'import /etc/caddy/projects/*' | sudo tee -a /etc/caddy/Caddyfile
@@ -92,7 +98,7 @@ https://overflow-sudo.github.io/MyMusic/ → **Ayarlar → Bulut** → adres: `h
 cd /opt/mymusic && git pull && cd server && docker compose up -d --build
 ```
 
-**Yedekleme**: her şey `/opt/mymusic/server/data/` içinde (`db.sqlite` + `files/`). En güvenlisi durdurup kopyalamak:
+**Yedekleme**: her şey `/opt/mymusic/server/data/` içinde (`db.sqlite` + `files/`). Durdurup arşivle (veritabanı WAL kullandığı için canlı kopya güvenli değil):
 
 ```bash
 cd /opt/mymusic/server
@@ -101,7 +107,7 @@ sudo tar czf ~/mymusic-yedek-$(date +%F).tar.gz data
 docker compose start
 ```
 
-Durdurmadan almak istersen veritabanı için `sqlite3 data/db.sqlite ".backup 'db-yedek.sqlite'"` kullan (sqlite3 kurulu olmalı) ve `data/files/` klasörünü ayrıca kopyala.
+Arşiv `sudo` ile oluşturulduğu için root'a aittir; kopyalamadan önce `sudo chown "$USER": ~/mymusic-yedek-*.tar.gz` yapabilirsin.
 
 **Şifre değiştirme**: `.env` içindeki `OWNER_PASSWORD`'ü düzenle, sonra `docker compose up -d` (env değişince konteyner yeniden oluşturulur). Dürüst not: daha önce giriş yapmış cihazların jetonları şifre değişince **geçersiz olmaz**; çalışmaya devam ederler. Jeton iptali şu an yalnızca telefon sayfasındaki **Çıkış yap** ile (o oturumun jetonu) yapılır. Tüm jetonları birden geçersiz kılmak için (cihazlar yeniden şifre sorar):
 

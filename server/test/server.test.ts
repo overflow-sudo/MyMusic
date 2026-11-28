@@ -15,8 +15,13 @@ describe('config', () => {
     expect(() => loadConfig({ SIGNING_SECRET: 'x' })).toThrow(/OWNER_PASSWORD/)
     expect(() => loadConfig({ OWNER_PASSWORD: 'x' })).toThrow(/SIGNING_SECRET/)
   })
+  it('rejects the placeholder and short passwords', () => {
+    expect(() => loadConfig({ OWNER_PASSWORD: 'change-me', SIGNING_SECRET: 'b' })).toThrow(/OWNER_PASSWORD must be changed/)
+    expect(() => loadConfig({ OWNER_PASSWORD: 'short-pw-11', SIGNING_SECRET: 'b' })).toThrow(/at least 12/)
+    expect(() => loadConfig({ OWNER_PASSWORD: 'twelve-chars', SIGNING_SECRET: 'b' })).not.toThrow()
+  })
   it('applies defaults', () => {
-    const c = loadConfig({ OWNER_PASSWORD: 'a', SIGNING_SECRET: 'b' })
+    const c = loadConfig({ OWNER_PASSWORD: 'a-long-enough-pw', SIGNING_SECRET: 'b' })
     expect(c.port).toBe(8120)
     expect(c.publicUrl).toBe('https://music.emiraksu.me')
     expect(c.maxUploadBytes).toBe(4294967296)

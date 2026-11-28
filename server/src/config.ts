@@ -11,6 +11,8 @@ export interface Config {
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (!env.OWNER_PASSWORD) throw new Error('OWNER_PASSWORD is required')
   if (!env.SIGNING_SECRET) throw new Error('SIGNING_SECRET is required')
+  if (env.OWNER_PASSWORD === 'change-me' || env.OWNER_PASSWORD.length < 12)
+    throw new Error('OWNER_PASSWORD must be changed from the placeholder and be at least 12 characters (try: openssl rand -base64 24)')
   const num = (name: string, def: number): number => {
     const raw = env[name]
     if (raw === undefined || raw === '') return def
