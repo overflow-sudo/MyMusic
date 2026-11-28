@@ -146,23 +146,41 @@ describe('recording actions', () => {
     const dir = await songDir(mem, song)
     await dir.writeFile(A, 'aaa')
     const order: string[] = []
-    const cloud = { afterLocalDelete: vi.fn(async (_s: typeof song, name: string) => { order.push(`cloud:${name}:${(await dir.readFile(name)) ? 'still' : 'gone'}`) }) }
+    const at = async (step: string, name: string) => order.push(`${step}:${(await dir.readFile(name)) ? 'still' : 'gone'}`)
+    const cloud = {
+      prepareDelete: vi.fn(async (_s: typeof song, name: string) => {
+        await at('queued', name)
+        return { cancel: async () => void order.push('cancel'), send: async () => void (await at('sent', name)) }
+      }),
+    }
     render(<RecordingList root={mem} song={song} cloud={cloud} />)
     await screen.findAllByRole('listitem')
     fireEvent.click(screen.getByRole('button', { name: 'Sil' }))
     expect(screen.getByText('Bu kayıt bu bilgisayardan ve buluttan silinsin mi?')).toBeInTheDocument()
     fireEvent.click(within(screen.getByRole('group', { name: 'Silme onayı' })).getByRole('button', { name: 'Sil' }))
     await waitFor(() => expect(screen.getByText('Henüz kayıt yok.')).toBeInTheDocument())
-    expect(order).toEqual([`cloud:${A}:gone`])
+    await waitFor(() => expect(order).toEqual(['queued:still', 'sent:gone']))
   })
 
   it('a failing cloud step still removes the row (the local file is gone)', async () => {
     const mem = createMemoryDir()
     await (await songDir(mem, song)).writeFile(A, 'aaa')
-    render(<RecordingList root={mem} song={song} cloud={{ afterLocalDelete: async () => { throw new Error('x') } }} />)
+    render(<RecordingList root={mem} song={song} cloud={{ prepareDelete: async () => { throw new Error('x') } }} />)
     await screen.findAllByRole('listitem')
     fireEvent.click(screen.getByRole('button', { name: 'Sil' }))
     fireEvent.click(within(screen.getByRole('group', { name: 'Silme onayı' })).getByRole('button', { name: 'Sil' }))
     await waitFor(() => expect(screen.getByText('Henüz kayıt yok.')).toBeInTheDocument())
+  })
+  it('a failing local delete cancels the queued cloud delete', async () => {
+    const mem = createMemoryDir()
+    await (await songDir(mem, song)).writeFile(A, 'aaa')
+    const failing: FsDir = { ...mem, dir: async (n, o) => { const d = await mem.dir(n, o); return d && n === 'recordings' ? { ...d, dir: async (m, p) => { const x = await d.dir(m, p); return x && { ...x, remove: async () => { throw new Error('locked') } } } } : d } }
+    const calls: string[] = []
+    render(<RecordingList root={failing} song={song} cloud={{ prepareDelete: async () => ({ cancel: async () => void calls.push('cancel'), send: async () => void calls.push('send') }) }} />)
+    await screen.findAllByRole('listitem')
+    fireEvent.click(screen.getByRole('button', { name: 'Sil' }))
+    fireEvent.click(within(screen.getByRole('group', { name: 'Silme onayı' })).getByRole('button', { name: 'Sil' }))
+    expect(await screen.findByText('Silinemedi, tekrar dene.')).toBeInTheDocument()
+    expect(calls).toEqual(['cancel'])
   })
 })

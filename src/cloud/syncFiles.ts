@@ -1,7 +1,7 @@
 import type { Cover, Song, Track } from '../domain/types'
 import { writeCover } from '../storage/cover'
 import type { FsDir } from '../storage/fsDir'
-import { isSyncTrackName, readSongFile, writeTrackFile } from '../storage/repo'
+import { isSyncTrackName, listSongFiles, readSongFile, removeSongFiles, writeTrackFile } from '../storage/repo'
 import { CloudError, type CloudApi } from './api'
 import { uploadBlob } from './chunkedUpload'
 import { sha256Hex } from './hash'
@@ -24,6 +24,8 @@ export interface FilesSyncDeps {
   /** Hash cache keyed by file identity (folder/name/size/mtime), so unchanged files aren't re-hashed every pass. */
   hashCache?: Map<string, string>
   onProgress?(done: number, total: number): void
+  /** Backfill hashing limit (default MAX_BACKFILL_BYTES). */
+  maxBackfillBytes?: number
 }
 
 export interface FilesSyncStats {
@@ -34,7 +36,13 @@ export interface FilesSyncStats {
   failed: number
   stopped: boolean
   rateLimited: boolean
+  /** Things the user should know (status lastError), e.g. a file too big to hash. */
+  notes: string[]
 }
+
+/** Files above this are never hashed for a backfill (whole-file hashing in memory). */
+export const MAX_BACKFILL_BYTES = 200 * 1024 * 1024
+export const BIG_FILE_NOTE = 'Çok büyük bir dosya eşitlenmedi (200 MB üstü).'
 
 type Kind = 'track' | 'cover'
 
@@ -42,6 +50,8 @@ const TRACK_MIME: Record<string, string> = { mp3: 'audio/mpeg', m4a: 'audio/mp4'
 const COVER_MIME: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' }
 const extOf = (name: string) => name.slice(name.lastIndexOf('.') + 1).toLowerCase()
 const isSyncCoverName = (name: string) => /^cover\.[a-z0-9]{1,5}$/.test(name)
+const KIND_FILE: Record<Kind, RegExp> = { track: /^track\./, cover: /^cover\./i }
+const kindFiles = async (root: FsDir, song: Song, kind: Kind) => (await listSongFiles(root, song)).filter((n) => KIND_FILE[kind].test(n)).sort()
 
 function mimeFor(kind: Kind, file: File): string | null {
   const ext = extOf(file.name)
@@ -62,10 +72,10 @@ const fatal = (e: unknown) => e instanceof CloudError && (e.kind === 'offline' |
  * One tracks/covers pass. Per live song and kind, with the merged record's hash as the authority (decision 4):
  * - local file == record hash: make sure the server has it (HEAD probe, once per session) and upload if not;
  * - local missing / different: download when the server's copy has the record hash, else retry later.
- * Missing hashes are backfilled from the local file with an automatic patch first.
+ * A missing hash is adopted from the server's copy, or (server has none) backfilled from the local file, by automatic patch.
  */
 export async function syncFilesOnce(d: FilesSyncDeps): Promise<FilesSyncStats> {
-  const stats: FilesSyncStats = { uploaded: 0, downloaded: 0, pending: 0, failed: 0, stopped: false, rateLimited: false }
+  const stats: FilesSyncStats = { uploaded: 0, downloaded: 0, pending: 0, failed: 0, stopped: false, rateLimited: false, notes: [] }
   const confirmed = d.confirmed ?? new Set<string>()
   const cache = d.hashCache ?? new Map<string, string>()
   const stop = () => d.signal?.aborted || d.shouldStop()
@@ -87,19 +97,27 @@ export async function syncFilesOnce(d: FilesSyncDeps): Promise<FilesSyncStats> {
     let ref = song && refOf(song, kind)
     if (!song || !ref) continue
     const local = await readSongFile(d.root, song, ref.fileName)
-    const localHash = local ? await hashOf(song, local) : null
-
-    if (!ref.hash) {
-      if (!localHash) continue // nothing to go on yet; the other computer backfills its copy
-      await backfill(d, song, kind, localHash)
-      song = current(id)
-      ref = song && refOf(song, kind)
-      if (!song || !ref || ref.hash !== localHash) continue
-    }
-    const want = ref.hash!
-    const tag = `${id}/${kind}/${want}`
 
     try {
+      if (!ref.hash) {
+        // A record from before hashes existed. The server's copy wins when it has one (adopted into the record);
+        // only when the server has no file is this computer's file the only candidate and gets hashed.
+        const server = await d.api.headFile(id, kind)
+        let adopt: string
+        if (server) adopt = server
+        else if (server === '' || !local) { stats.pending++; continue }
+        else if (local.size > (d.maxBackfillBytes ?? MAX_BACKFILL_BYTES)) { stats.notes.push(BIG_FILE_NOTE); continue }
+        else adopt = await hashOf(song, local)
+        await backfill(d, song, kind, adopt)
+        song = current(id)
+        ref = song && refOf(song, kind)
+        if (!song || !ref || ref.hash !== adopt) continue
+        if (server) confirmed.add(`${id}/${kind}/${adopt}`)
+      }
+      const want = ref.hash!
+      const tag = `${id}/${kind}/${want}`
+      const localHash = local ? await hashOf(song, local) : null
+
       if (local && localHash === want) {
         if (confirmed.has(tag)) continue
         const serverHash = await d.api.headFile(id, kind)
@@ -115,21 +133,29 @@ export async function syncFilesOnce(d: FilesSyncDeps): Promise<FilesSyncStats> {
         const okName = kind === 'track' ? isSyncTrackName(ref.fileName) : isSyncCoverName(ref.fileName)
         if (!okName) { stats.pending++; continue }
         if (stop()) { stats.stopped = true; break }
+        // Every track.* / cover.* in the folder now: a write only replaces these, and any change meanwhile
+        // (an import of another extension, a new user cover) cancels the write.
+        const before = await kindFiles(d.root, song, kind)
         let got: { blob: Blob; hash: string | null }
         try { got = await d.api.getFile(id, kind, { signal: d.signal }) } catch (e) {
           if (e instanceof CloudError && e.kind === 'gone') { stats.pending++; continue }
           throw e
         }
         if (got.hash !== want || (await sha256Hex(got.blob)) !== want) { stats.pending++; continue }
-        // The record may have changed while downloading (e.g. a new import): only write what it still asks for.
+        const after = await kindFiles(d.root, song, kind)
+        if (after.join('/') !== before.join('/')) { stats.pending++; continue }
+        // The local file must still be the one we compared (an import may be between its write and its patch).
+        const again = await readSongFile(d.root, song, ref.fileName)
+        if ((again ? await hashOf(song, again) : null) !== localHash) { stats.pending++; continue }
+        // Last check right before writing (no await in between): the record still asks for this, song not deleted.
         const now = current(id)
         const nowRef = now && refOf(now, kind)
         if (!now || !nowRef || nowRef.hash !== want || nowRef.fileName !== ref.fileName) continue
-        // ...and the local file must still be the one we compared (an import may be between its write and its patch).
-        const again = await readSongFile(d.root, now, ref.fileName)
-        if ((again ? await hashOf(now, again) : null) !== localHash) continue
-        if (kind === 'track') await writeTrackFile(d.root, now, ref.fileName, got.blob)
-        else await writeCover(d.root, now, got.blob, extOf(ref.fileName))
+        if (kind === 'track') await writeTrackFile(d.root, now, ref.fileName, got.blob, { replace: before })
+        else {
+          await writeCover(d.root, now, got.blob, extOf(ref.fileName), { cleanup: false })
+          await removeSongFiles(d.root, now, before.filter((n) => n.toLowerCase() !== ref!.fileName.toLowerCase()))
+        }
         confirmed.add(tag)
         stats.downloaded++
       }

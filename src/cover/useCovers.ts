@@ -27,10 +27,9 @@ interface Options {
   hash?: (data: Blob) => Promise<string>
 }
 
-/** `{ hash }` for the cover record, or nothing when hashing is off or fails (the sync backfills it). */
+/** `{ hash }` for the cover record ({} when hashing is off). A failing hash rejects: no hashless record is saved. */
 async function hashField(hash: Options['hash'], data: Blob): Promise<{ hash?: string }> {
-  if (!hash) return {}
-  try { return { hash: await hash(data) } } catch { return {} }
+  return hash ? { hash: await hash(data) } : {}
 }
 
 const MAX_CONCURRENT = 2
@@ -108,8 +107,10 @@ export function useCovers(
           if (stale()) return 'found'
           const { root, patchSong } = deps.current
           // Checked again right before writing (inside the serial lock), so a user's own file is never replaced.
+          // Hashed before writing, so the patch follows the write directly.
+          const h = blob ? await hashField(deps.current.hash, blob) : {}
           const written = blob ? await writeCover(root, song, blob, 'jpg', { cleanup: false }) : null
-          const cover: Cover = written ? { source: 'itunes', fileName: written, ...(await hashField(deps.current.hash, blob!)) } : { source: 'itunes', url: hit.artworkUrl }
+          const cover: Cover = written ? { source: 'itunes', fileName: written, ...h } : { source: 'itunes', url: hit.artworkUrl }
           // Only a deleted song can turn stale while writing (cover edits wait for the lock); its folder keeps the file.
           if (stale()) return 'found'
           bump(song.id)
@@ -142,8 +143,8 @@ export function useCovers(
         if (!supportedImage(file)) return 'unsupported'
         const { root, patchSong } = deps.current
         bump(song.id)
+        const h = await hashField(deps.current.hash, file) // before writing; a failure writes nothing
         const fileName = await writeCover(root, song, file, extOf(file), { cleanup: false })
-        const h = await hashField(deps.current.hash, file)
         try {
           await patchSong(song.id, { cover: { source: 'user', fileName, ...h } })
         } catch (e) {

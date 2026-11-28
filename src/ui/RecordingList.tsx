@@ -19,8 +19,8 @@ interface Props {
 }
 
 export interface RecordingCloud {
-  /** Called after the local file is gone; resolves once the server delete is sent or queued. */
-  afterLocalDelete(song: Song, fileName: string): Promise<void>
+  /** Queues the server delete before the local file goes; null when there is nothing to do. */
+  prepareDelete(song: Song, fileName: string): Promise<{ cancel(): Promise<void>; send(): Promise<void> } | null>
 }
 
 const CLOUD_CONFIRM = 'Bu kayıt bu bilgisayardan ve buluttan silinsin mi?'
@@ -138,9 +138,15 @@ export default function RecordingList({ root, song, onChanged, headingId, cloud 
   }, [entries, headingId])
 
   const remove = async (fileName: string) => {
-    await deleteRecording(root, song, fileName)
-    // The user asked: the local file is gone either way; the server delete is sent now or queued for the next sync.
-    if (cloud) await cloud.afterLocalDelete(song, fileName).catch(() => undefined)
+    // Queued first, so the server delete is never forgotten; then the local file; then the server (background).
+    const op = cloud ? await cloud.prepareDelete(song, fileName).catch(() => null) : null
+    try {
+      await deleteRecording(root, song, fileName)
+    } catch (e) {
+      await op?.cancel()
+      throw e
+    }
+    void op?.send()
     setEntries((prev) => {
       const list = prev ?? []
       const i = list.findIndex((e) => e.fileName === fileName)

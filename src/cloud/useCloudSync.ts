@@ -4,6 +4,7 @@ import { CloudError, createApi } from './api'
 import { getSession, onSessionChange, sessionGeneration, type Session } from './session'
 import type { FsDir } from '../storage/fsDir'
 import { getCloudStatus, markSynced, setCloudProgress, setCloudStatus } from './status'
+import { pendingDeleteNote } from './deleteRecording'
 import { syncFilesOnce, type FilesSyncApi } from './syncFiles'
 import { syncLibraryOnce, type LibrarySyncApi } from './syncLibrary'
 import { syncRecordingsOnce, type RecordingsSyncApi } from './syncRecordings'
@@ -100,6 +101,7 @@ export function useCloudSync({ ready, busy, revision, getLocalSongs, applyMerged
       const getLocalSongs = () => deps.current.getLocalSongs()
       const stats = await syncLibraryOnce({ api, getLocalSongs, applyMerged: (s) => deps.current.applyMerged(s) })
       let failed = stats.failed > 0
+      let note: string | null = null
       const f = deps.current.files
       if (f && mine()) {
         const full = api as FullApi
@@ -116,6 +118,7 @@ export function useCloudSync({ ready, busy, revision, getLocalSongs, applyMerged
             onProgress: (i, n) => mine() && setCloudProgress(`Dosyalar: ${i}/${n}`),
           })
           failed ||= fs.failed > 0
+          note = fs.notes[0] ?? null
           let stopped = fs.stopped
           if (!stopped && mine()) {
             const rs = await syncRecordingsOnce({
@@ -138,7 +141,7 @@ export function useCloudSync({ ready, busy, revision, getLocalSongs, applyMerged
       }
       if (mine()) {
         authBlocked.current = null
-        setCloudStatus('connected', failed ? FAILED_TEXT : null)
+        setCloudStatus('connected', failed ? FAILED_TEXT : note ?? pendingDeleteNote())
         markSynced()
       }
     } catch (e) {

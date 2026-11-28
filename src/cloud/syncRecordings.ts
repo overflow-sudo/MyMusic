@@ -102,6 +102,7 @@ export async function syncRecordingsOnce(d: RecordingsSyncDeps): Promise<Recordi
     const { song, entry, id } = todo[i]
     const file = await readSongFile(d.root, song, entry.fileName)
     if (!file) continue
+    if (stop()) { stats.stopped = true; break } // a take may have started while reading
     d.onProgress?.(i + 1, todo.length)
     const body = { target: 'recording', songId: song.id, id, fileName: entry.fileName, mime: mimeFor(entry.kind), kind: entry.kind, recordedAt: entry.date.toISOString() }
     try {
@@ -111,7 +112,12 @@ export async function syncRecordingsOnce(d: RecordingsSyncDeps): Promise<Recordi
       if (stop()) { stats.stopped = true; break }
       if (e instanceof CloudError && e.phase === 'complete') {
         // The server may have stored it anyway: look before ever sending it again.
-        const again = await d.api.getRecordings()
+        let again: Awaited<ReturnType<RecordingsSyncApi['getRecordings']>>
+        try { again = await d.api.getRecordings() } catch (v) {
+          if (fatal(v)) throw v
+          stats.failed++ // unknown outcome: next pass's list decides; go on with the next file
+          continue
+        }
         if (again.some((r) => r.id === id && !('deleted' in r && r.deleted))) stats.uploaded++
         else stats.pending++
         continue

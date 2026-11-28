@@ -6,7 +6,7 @@ import { songDir } from '../storage/repo'
 import { CloudError } from './api'
 import { createFakeCloud } from './fakeCloud.testutil'
 import { sha256Hex } from './hash'
-import { syncFilesOnce, type FilesSyncDeps } from './syncFiles'
+import { BIG_FILE_NOTE, syncFilesOnce, type FilesSyncDeps } from './syncFiles'
 
 const mk = (id: string, extra: Partial<Song> = {}): Song => ({
   ...createSong({ title: id, artist: 'Band', status: 'learning', bpm: 100, countInBeats: 4 }, new Date('2026-11-01T00:00:00Z'), id),
@@ -206,5 +206,111 @@ describe('syncFilesOnce', () => {
     }
     await syncFilesOnce(h.deps)
     expect(await read(h.root, song, 'track.mp3')).toBe('just-imported')
+  })
+  it('an import with another extension during a download is kept (no write, nothing removed)', async () => {
+    const hash = await sha256Hex('server')
+    const song = mk('s1', { track: { fileName: 'track.mp3', startSec: 0, volume: 0.7, hash } })
+    const h = setup([song])
+    h.cloud.files.set('s1/track', { blob: new Blob(['server']), hash, fileName: 'track.mp3', mime: 'audio/mpeg' })
+    const getFile = h.cloud.api.getFile
+    h.cloud.api.getFile = async (...a) => {
+      const r = await getFile(...a)
+      await put(h.root, song, 'track.wav', 'imported') // importTrack wrote it; its patch hasn't landed yet
+      return r
+    }
+    const stats = await syncFilesOnce(h.deps)
+    expect(await read(h.root, song, 'track.wav')).toBe('imported')
+    expect(await read(h.root, song, 'track.mp3')).toBeNull()
+    expect(stats.pending).toBe(1)
+  })
+
+  it('a user cover written during a cover download is kept', async () => {
+    const hash = await sha256Hex('jpg')
+    const song = mk('s1', { cover: { source: 'itunes', fileName: 'cover.jpg', hash } })
+    const h = setup([song])
+    h.cloud.files.set('s1/cover', { blob: new Blob(['jpg']), hash, fileName: 'cover.jpg', mime: 'image/jpeg' })
+    const getFile = h.cloud.api.getFile
+    h.cloud.api.getFile = async (...a) => {
+      const r = await getFile(...a)
+      await put(h.root, song, 'cover.png', 'mine')
+      return r
+    }
+    await syncFilesOnce(h.deps)
+    expect(await read(h.root, song, 'cover.png')).toBe('mine')
+    expect(await read(h.root, song, 'cover.jpg')).toBeNull()
+  })
+
+  it('a cover download replaces only the cover files seen before it', async () => {
+    const hash = await sha256Hex('jpg')
+    const song = mk('s1', { cover: { source: 'itunes', fileName: 'cover.jpg', hash } })
+    const h = setup([song])
+    await put(h.root, song, 'cover.webp', 'old')
+    await put(h.root, song, '2026-11-24_21-30-05_video.webm', 'take')
+    h.cloud.files.set('s1/cover', { blob: new Blob(['jpg']), hash, fileName: 'cover.jpg', mime: 'image/jpeg' })
+    await syncFilesOnce(h.deps)
+    expect(await read(h.root, song, 'cover.jpg')).toBe('jpg')
+    expect(await read(h.root, song, 'cover.webp')).toBeNull()
+    expect(await read(h.root, song, '2026-11-24_21-30-05_video.webm')).toBe('take')
+  })
+
+  it('a song deleted during the download gets no file', async () => {
+    const hash = await sha256Hex('server')
+    const song = mk('s1', { track: { fileName: 'track.mp3', startSec: 0, volume: 0.7, hash } })
+    const h = setup([song])
+    h.cloud.files.set('s1/track', { blob: new Blob(['server']), hash, fileName: 'track.mp3', mime: 'audio/mpeg' })
+    let local: Song[] = [song]
+    h.deps.getLocalSongs = () => local
+    const getFile = h.cloud.api.getFile
+    h.cloud.api.getFile = async (...a) => {
+      const r = await getFile(...a)
+      local = [{ ...song, deletedAt: '2026-11-03T00:00:00Z' }]
+      return r
+    }
+    await syncFilesOnce(h.deps)
+    expect(await read(h.root, song, 'track.mp3')).toBeNull()
+  })
+
+  it('hashless record + server copy: adopts the server hash (auto) and downloads it, never hashing the local file', async () => {
+    const serverHash = await sha256Hex('server-new')
+    const song = mk('s1', { track: { fileName: 'track.mp3', startSec: 0, volume: 0.7 } })
+    const h = setup([song])
+    await put(h.root, song, 'track.mp3', 'stale-local')
+    h.cloud.files.set('s1/track', { blob: new Blob(['server-new']), hash: serverHash, fileName: 'track.mp3', mime: 'audio/mpeg' })
+    await syncFilesOnce(h.deps)
+    expect(h.patches).toEqual([{ id: 's1', patch: { track: { fileName: 'track.mp3', startSec: 0, volume: 0.7, hash: serverHash } }, auto: true }])
+    expect(await read(h.root, song, 'track.mp3')).toBe('server-new')
+    expect(h.cloud.log.filter((l) => l === 'create')).toEqual([])
+  })
+
+  it('hashless record + server file without a hash: retry later, no patch', async () => {
+    const song = mk('s1', { track: { fileName: 'track.mp3', startSec: 0, volume: 0.7 } })
+    const h = setup([song])
+    await put(h.root, song, 'track.mp3', 'x')
+    h.cloud.files.set('s1/track', { blob: new Blob(['y']), hash: 'unused', fileName: 'track.mp3', mime: 'audio/mpeg' })
+    h.cloud.headerHash = () => ''
+    const stats = await syncFilesOnce(h.deps)
+    expect(h.patches).toEqual([])
+    expect(stats.pending).toBe(1)
+  })
+
+  it('backfill skips files above the size limit with a note', async () => {
+    const song = mk('s1', { track: { fileName: 'track.mp3', startSec: 0, volume: 0.7 } })
+    const h = setup([song], { maxBackfillBytes: 3 })
+    await put(h.root, song, 'track.mp3', 'four')
+    const stats = await syncFilesOnce(h.deps)
+    expect(h.patches).toEqual([])
+    expect(stats.notes).toEqual([BIG_FILE_NOTE])
+    expect(h.cloud.log.filter((l) => l === 'create')).toEqual([])
+  })
+
+  it('re-checks stop after hashing, before uploading', async () => {
+    const hash = await sha256Hex('local')
+    const song = mk('s1', { track: { fileName: 'track.mp3', startSec: 0, volume: 0.7, hash } })
+    let calls = 0
+    const h = setup([song], { shouldStop: () => ++calls > 1 })
+    await put(h.root, song, 'track.mp3', 'local')
+    const stats = await syncFilesOnce(h.deps)
+    expect(stats.stopped).toBe(true)
+    expect(h.cloud.log.filter((l) => l === 'create')).toEqual([])
   })
 })

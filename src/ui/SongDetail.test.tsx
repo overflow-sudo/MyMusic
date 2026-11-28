@@ -149,6 +149,16 @@ describe('SongDetail', () => {
     await waitFor(() => expect(patches.at(-1)).toEqual({ track: { fileName: 'track.mp3', startSec: 5, volume: 0.7, hash: 'h-abc' } }))
   })
 
+  it('an unreadable file (hash fails) is not imported: message, no patch, no file', async () => {
+    const { patches, root } = setup({ hash: async () => { throw new Error('read') } })
+    openDrawer()
+    fireEvent.change(screen.getByLabelText('Parça seç'), { target: { files: [new File(['abc'], 'x.wav', { type: 'audio/wav' })] } })
+    expect(await screen.findByText('Parça okunamadı, tekrar dene.')).toBeInTheDocument()
+    expect(patches).toEqual([])
+    const dir = await (await root.dir('recordings'))?.dir(base.folderName)
+    expect(dir ? (await dir.list()).map((e) => e.name) : []).toEqual([])
+  })
+
   it('start point error does not leak into a re-imported track', async () => {
     setup()
     openDrawer()

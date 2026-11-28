@@ -306,4 +306,13 @@ describe('useCovers', () => {
       { id: 's1', patch: { cover: { source: 'user', fileName: 'cover.png', hash: 'h-mine' } } },
     ])
   })
+  it('a failing hash writes no user cover and saves no hashless record', async () => {
+    const s = mk(1)
+    const { root, view, patches } = setup([s], { hash: async () => { throw new Error('read') } })
+    await act(async () => {
+      await expect(view.result.current.covers.setUserCover(s, new File(['mine'], 'a.png', { type: 'image/png' }))).rejects.toThrow('read')
+    })
+    expect(patches).toEqual([])
+    expect((await (await songDir(root, s)).list()).map((e) => e.name)).toEqual([])
+  })
 })

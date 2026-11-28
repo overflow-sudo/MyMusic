@@ -186,4 +186,27 @@ describe('syncRecordingsOnce', () => {
     expect(await names(h.root, gone)).toEqual([V2])
     expect(h.cloud.log.filter((l) => l === 'create')).toEqual([])
   })
+  it('re-checks stop after reading the file, before uploading', async () => {
+    const s = mk('s1')
+    let calls = 0
+    const h = setup([s], { shouldStop: () => ++calls > 1 })
+    await rec(h.root, s, V1)
+    expect((await syncRecordingsOnce(h.deps)).stopped).toBe(true)
+    expect(h.cloud.log.filter((l) => l === 'create')).toEqual([])
+  })
+
+  it('a failing verify list after a complete timeout counts as failed and the pass goes on', async () => {
+    const s = mk('s1')
+    const h = setup([s])
+    await rec(h.root, s, V1)
+    await rec(h.root, s, V2)
+    h.cloud.completeTimesOut = (b) => b.fileName === V1
+    const list = h.cloud.api.getRecordings
+    let n = 0
+    h.cloud.api.getRecordings = async () => { if (++n === 2) throw new CloudError('server', 'Oops', { status: 500 }); return list() }
+    const stats = await syncRecordingsOnce(h.deps)
+    expect(stats).toMatchObject({ failed: 1, uploaded: 1 })
+    expect(h.cloud.recordings.has(await recordingId('s1', V2))).toBe(true)
+    expect(await names(h.root, s)).toEqual([V1, V2].sort())
+  })
 })

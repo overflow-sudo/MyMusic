@@ -37,6 +37,9 @@ interface Props {
   sync?: { hash?: (data: Blob) => Promise<string>; recordings?: RecordingCloud }
 }
 
+const SAVE_FAILED = 'Kaydedilemedi, tekrar dene.'
+const READ_FAILED = 'Parça okunamadı, tekrar dene.'
+
 const STATUS: { value: SongStatus; label: string }[] = [
   { value: 'learning', label: 'Çalıştığım' },
   { value: 'known', label: 'Bildiğim' },
@@ -47,7 +50,7 @@ const upperTr = (s: string) => s.toLocaleUpperCase('tr-TR')
 export default function SongDetail({ song, root, onBack, patchSong, deleteSong, recorder, drawerSlot, recordingsVersion = 0, onRecordingsChanged, busy = false, covers, sync }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editing, setEditing] = useState(false)
-  const [saveError, setSaveError] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [bpm, setBpm] = useState(String(song.bpm))
   const [beats, setBeats] = useState(String(song.countInBeats))
   const [errors, setErrors] = useState<{ bpm?: string; countInBeats?: string }>({})
@@ -62,12 +65,12 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
 
   // Every save funnels through here so a rejected write shows one message instead of an unhandled rejection.
   const save = async (patch: Partial<Song>): Promise<boolean> => {
-    setSaveError(false)
+    setSaveError(null)
     try {
       await patchSong(song.id, patch)
       return true
     } catch {
-      setSaveError(true)
+      setSaveError(SAVE_FAILED)
       return false
     }
   }
@@ -86,35 +89,39 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
     await save({ track })
   }
   const doImport = async (file: File) => {
-    setSaveError(false)
+    setSaveError(null)
     try {
+      // Hashed before writing (so the patch lands right after the write) and part of the same edit: a hashless record
+      // could be paired with the other computer's old file. Unreadable file → no import.
+      let hash: string | undefined
+      if (sync?.hash) {
+        try { hash = await sync.hash(file) } catch { return setSaveError(READ_FAILED) }
+      }
       const imported = await importTrack(root, song, file)
-      // Hash in the same edit: the other computer must never pair the new record with its old file.
-      const hash = sync?.hash ? await sync.hash(file).catch(() => undefined) : undefined
       const track = hash ? { ...imported, hash } : imported
       await patchSong(song.id, { track })
       setTrackVersion((v) => v + 1)
     } catch {
-      setSaveError(true)
+      setSaveError(SAVE_FAILED)
     }
   }
   const doRemove = async () => {
-    setSaveError(false)
+    setSaveError(null)
     try {
       // Patch first: if it fails the song still points at an existing file; an orphan file is harmless.
       await patchSong(song.id, { track: undefined })
       await removeTrack(root, song)
     } catch {
-      setSaveError(true)
+      setSaveError(SAVE_FAILED)
     }
   }
   // Cover actions report a failed save the same way as every other drawer edit.
   const guarded = async <T,>(op: () => Promise<T>): Promise<T | null> => {
-    setSaveError(false)
+    setSaveError(null)
     try {
       return await op()
     } catch {
-      setSaveError(true)
+      setSaveError(SAVE_FAILED)
       return null
     }
   }
@@ -124,7 +131,7 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
       await deleteSong(song.id)
       onBack()
     } catch {
-      setSaveError(true)
+      setSaveError(SAVE_FAILED)
     }
   }
 
@@ -204,7 +211,7 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
         <div className="drawer-sections" hidden={editing}>
           {saveError && (
             <p className="note" role="alert">
-              Kaydedilemedi, tekrar dene.
+              {saveError}
             </p>
           )}
           {covers && (

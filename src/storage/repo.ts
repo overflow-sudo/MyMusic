@@ -92,11 +92,26 @@ export async function readSongFile(root: FsDir, song: Song, fileName: string): P
 /** Valid names for a synced track: `track.<ext>` (lower-case alnum, max 5). */
 export const isSyncTrackName = (name: string) => /^track\.[a-z0-9]{1,5}$/.test(name)
 
-/** Writes a downloaded track under `fileName` (same naming rule as importTrack) and removes other track.* files. */
-export async function writeTrackFile(root: FsDir, song: Song, fileName: string, data: Blob): Promise<void> {
+/**
+ * Writes a downloaded track under `fileName` (same naming rule as importTrack). Other track.* files are removed only
+ * if listed in `replace` (what the caller saw before downloading), so a file imported meanwhile is never removed.
+ */
+export async function writeTrackFile(root: FsDir, song: Song, fileName: string, data: Blob, opts: { replace: string[] }): Promise<void> {
   if (!isSyncTrackName(fileName)) throw new Error('Invalid track file name')
   const dir = await songDir(root, song)
   await dir.writeFile(fileName, data)
-  for (const e of await dir.list())
-    if (e.kind === 'file' && isTrackFile(e.name) && e.name.toLowerCase() !== fileName) await dir.remove(e.name)
+  await removeSongFiles(root, song, opts.replace.filter((n) => isTrackFile(n) && n.toLowerCase() !== fileName))
+}
+
+/** Names of the files in the song folder ([] when it doesn't exist). */
+export async function listSongFiles(root: FsDir, song: Song): Promise<string[]> {
+  const dir = await existingSongDir(root, song)
+  return dir ? (await dir.list()).filter((e) => e.kind === 'file').map((e) => e.name) : []
+}
+
+/** Removes exactly these files of the song folder; missing ones are fine. */
+export async function removeSongFiles(root: FsDir, song: Song, names: string[]): Promise<void> {
+  if (!names.length) return
+  const dir = await existingSongDir(root, song)
+  if (dir) for (const n of names) await dir.remove(n)
 }

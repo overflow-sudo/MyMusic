@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { deleteRecordingInCloud } from './cloud/deleteRecording'
+import { prepareCloudDelete, withUnsavedDeletes } from './cloud/deleteRecording'
 import { sha256Hex } from './cloud/hash'
 import { useHasSession } from './cloud/session'
 import { useCloudSync } from './cloud/useCloudSync'
@@ -45,7 +45,7 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
   const covers = useCovers(root, songs, lib.patchSong, { backfill: lib.status === 'ready' && !selected, hash: sha256Hex })
   const { patchSong, getPendingDeletes, addPendingDelete, clearPendingDeletes } = lib
   const files = useMemo(
-    () => ({ root, patchSong, getPendingDeletes, clearPendingDeletes, onRecordingsDeleted: () => setCountsVersion((v) => v + 1) }),
+    () => ({ root, patchSong, ...withUnsavedDeletes({ getPendingDeletes, clearPendingDeletes }), onRecordingsDeleted: () => setCountsVersion((v) => v + 1) }),
     [root, patchSong, getPendingDeletes, clearPendingDeletes],
   )
   const cloud = useCloudSync({
@@ -59,7 +59,7 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
   const hasSession = useHasSession()
   const sync = useMemo(() => {
     const recordings: RecordingCloud | undefined = hasSession
-      ? { afterLocalDelete: async (song, fileName) => void (await deleteRecordingInCloud(song.id, fileName, { addPendingDelete, clearPendingDeletes })) }
+      ? { prepareDelete: (song, fileName) => prepareCloudDelete(song.id, fileName, { addPendingDelete, clearPendingDeletes }) }
       : undefined
     return { hash: sha256Hex, recordings }
   }, [hasSession, addPendingDelete, clearPendingDeletes])
