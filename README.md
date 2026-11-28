@@ -112,6 +112,45 @@ npm run build   # üretim derlemesi (dist/)
 
 İstersen şarkı listeni, parçaları ve kayıtları kendi sunucuna eşitleyebilir, kayıtları link ile paylaşabilirsin. Sunucu Docker ile kurulur; adım adım rehber: [server/KURULUM.md](server/KURULUM.md).
 
+### Bağlanma
+
+**⚙ Ayarlar → Bulut** bölümünde sunucu adresini ve parolanı gir, **Bağlan**'a bas. Bağlanınca eşitleme arka planda kendiliğinden çalışır (açılışta, değişiklikten birkaç saniye sonra, dakikada bir, internet geri gelince). **Şimdi eşitle** bunu hemen başlatır. Kayıt sırasında dosya aktarımı durur, kayıt bitince devam eder.
+
+### Neler eşitlenir
+
+- Eşitlenir: şarkılar (ad, sanatçı, tempo, durum, **akorlar**, **kapaklar**), arka plan **parçaları** ve **kayıtlar**.
+- Eşitlenmez (her cihazda ayrı): cihaz ve gecikme ayarları, ışık seçimi, mikrofon/kulaklık seçimi, önizleme gizleme.
+
+### Kayıtlar listesi ve durum simgeleri
+
+Şarkı ekranındaki **Kayıtlar** listesi bu bilgisayardaki ve yalnızca bulutta olan (ör. Mac'te çekilen) kayıtları birlikte gösterir. Her satırdaki simge durumu söyler:
+
+- **Bulut + işaret**: hem bu bilgisayarda hem bulutta.
+- **Bulut**: yalnız bulutta (bu bilgisayarda dosya yok; oynat ve indir yine çalışır).
+- **Bilgisayar**: yalnız bu bilgisayarda (henüz yüklenmedi).
+- **Yukarı ok**: yükleniyor. **Saat**: sunucu kaydı telefon uyumlu biçime hazırlıyor.
+
+Yalnız bulutta olan kayıt oynatılırken sunucudan geçici bir bağlantı alınır; **İndir** sunucudaki MP4 / M4A dosyasını indirir.
+
+### Paylaşma ve telefon sayfası
+
+- Bulutta olan bir kaydın satırında **Paylaş** (bağlantı simgesi) bağlantıyı panoya kopyalar ("Bağlantı kopyalandı"). Bağlantıyı açan kişi yalnızca o kaydı görür: şarkı adı, sanatçı, kapak, oynatıcı ve İndir. Başka hiçbir şeye erişemez.
+- Paylaşılan satırda **Paylaşımı kaldır** düğmesi çıkar; bağlantı hemen çalışmaz olur.
+- Henüz yüklenmemiş kayıtlar paylaşılamaz ("Önce buluta yüklenmeli").
+- Telefonda sunucu adresini açıp aynı parolayla girersen kayıtlarını dinleyebilir, paylaşabilir ve paylaşımı kaldırabilirsin.
+
+### Silme
+
+**Sil**, "Bu kayıt bu bilgisayardan ve buluttan silinsin mi?" diye sorar; onaylarsan kayıt hem bu bilgisayardan hem sunucudan silinir, diğer bilgisayardaki kopyası da eşitlemeyle silinir. Yalnız bulutta olan bir kaydı silmek sunucudaki kaydı siler. Silinen şarkı da diğer bilgisayarlardan kalkar.
+
+### İnternet yokken
+
+Uygulama internetsiz de aynen çalışır: kayıtlar klasöre yazılır, listede yalnız bu bilgisayardaki kayıtlar görünür. Bağlantı gelince bekleyen yüklemeler ve silmeler kendiliğinden gönderilir. Yüklemesi yarım kalan bir dosya baştan denenir; yerel kayıt hiçbir zaman yükleme hatasıyla silinmez.
+
+### İki bilgisayar kuralı
+
+Aynı şarkıyı iki bilgisayarda aynı anda değiştirirsen, şarkı başına **son yapılan değişiklik kazanır** (şarkının bütün alanları son değiştirenin sürümü olur). Aynı şarkıyı iki yerde birden düzenlemekten kaçın; bir bilgisayarda değiştirip eşitlenmesini bekledikten sonra diğerinde aç.
+
 ## Deneme listesi
 
 Bu adımlar kendi donanımınla elle denenmelidir:

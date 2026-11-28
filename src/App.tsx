@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { createApi } from './cloud/api'
 import { prepareCloudDelete, withUnsavedDeletes } from './cloud/deleteRecording'
 import { sha256Hex } from './cloud/hash'
-import { useHasSession } from './cloud/session'
+import { getSession, onSessionChange, sessionGeneration } from './cloud/session'
+import { useCloudStatus, usePassCount } from './cloud/status'
 import { useCloudSync } from './cloud/useCloudSync'
 import { useCovers } from './cover/useCovers'
 import { listRecordings } from './storage/repo'
@@ -56,13 +58,19 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
     applyMerged: lib.applyMerged,
     files,
   })
-  const hasSession = useHasSession()
+  const generation = useSyncExternalStore(onSessionChange, sessionGeneration)
+  const passes = usePassCount()
+  const syncing = useCloudStatus().state === 'syncing'
+  const recordingsApi = useMemo(() => {
+    const session = getSession()
+    return session ? createApi(session) : undefined
+  }, [generation]) // eslint-disable-line react-hooks/exhaustive-deps -- the session is read from storage per generation
   const sync = useMemo(() => {
-    const recordings: RecordingCloud | undefined = hasSession
-      ? { prepareDelete: (song, fileName) => prepareCloudDelete(song.id, fileName, { addPendingDelete, clearPendingDeletes }) }
+    const recordings: RecordingCloud | undefined = recordingsApi
+      ? { prepareDelete: (song, fileName) => prepareCloudDelete(song.id, fileName, { addPendingDelete, clearPendingDeletes }), api: recordingsApi, passes, syncing }
       : undefined
     return { hash: sha256Hex, recordings }
-  }, [hasSession, addPendingDelete, clearPendingDeletes])
+  }, [recordingsApi, passes, syncing, addPendingDelete, clearPendingDeletes])
   useEffect(() => {
     if (lib.status !== 'ready') return
     let cancelled = false

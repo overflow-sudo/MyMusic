@@ -24,6 +24,17 @@ export function downloadFile(file: Blob, fileName: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
+/** Saves a server file: a temporary anchor to the (signed) URL; the server sends Content-Disposition. */
+export function downloadUrl(url: string, fileName: string): void {
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName
+  a.hidden = true
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
 const svg = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false } as const
 
 const DownloadIcon = () => (

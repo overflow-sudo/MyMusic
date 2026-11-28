@@ -46,3 +46,15 @@ export function subscribeCloudStatus(fn: () => void): () => void {
 export function useCloudStatus(): CloudStatus {
   return useSyncExternalStore(subscribeCloudStatus, getCloudStatus)
 }
+
+// Counts finished sync passes (successful or not): lists that show server data refetch when it changes.
+let passCount = 0
+const passListeners = new Set<() => void>()
+export const getPassCount = (): number => passCount
+export function bumpPassCount(): void {
+  passCount++
+  for (const l of [...passListeners]) l()
+}
+export function usePassCount(): number {
+  return useSyncExternalStore((fn) => { passListeners.add(fn); return () => { passListeners.delete(fn) } }, getPassCount)
+}

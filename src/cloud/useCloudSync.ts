@@ -3,7 +3,7 @@ import type { Song } from '../domain/types'
 import { CloudError, createApi } from './api'
 import { getSession, onSessionChange, sessionGeneration, type Session } from './session'
 import type { FsDir } from '../storage/fsDir'
-import { getCloudStatus, markSynced, setCloudProgress, setCloudStatus } from './status'
+import { bumpPassCount, getCloudStatus, markSynced, setCloudProgress, setCloudStatus } from './status'
 import { pendingDeleteNote } from './deleteRecording'
 import { syncFilesOnce, type FilesSyncApi } from './syncFiles'
 import { syncLibraryOnce, type LibrarySyncApi } from './syncLibrary'
@@ -155,6 +155,7 @@ export function useCloudSync({ ready, busy, revision, getLocalSongs, applyMerged
       }
     } finally {
       running.current = false
+      bumpPassCount()
     }
     if (again.current && alive.current && !deps.current.busy) void pass(false)
   }, [])
