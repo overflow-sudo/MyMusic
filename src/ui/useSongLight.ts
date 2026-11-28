@@ -16,7 +16,11 @@ export function useSongLight(bpm: number | null, song?: { lightColor?: unknown }
       else lightBus.setFixedHue(null)
     }
     apply()
-    return onLightColorChange(apply)
+    const off = onLightColorChange(apply)
+    return () => {
+      off()
+      lightBus.setFixedHue(null)
+    }
   }, [songColor])
 
   useEffect(() => {

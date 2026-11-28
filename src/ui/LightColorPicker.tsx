@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getLightColor, isHexColor, LIGHT_PRESETS, onLightColorChange, setLightColor } from '../light/lightPrefs'
 
 interface Props {
@@ -7,6 +7,25 @@ interface Props {
   onChange(c: string | null): void
   /** Label of the "no color" option ('Otomatik' globally, 'Genel' per song). */
   noneLabel: string
+}
+
+/** Dragging in the native picker only updates a local draft; the value is committed once on the native `change`. */
+function ColorInput({ value, onCommit }: { value: string; onCommit(c: string): void }) {
+  const [draft, setDraft] = useState(value)
+  const ref = useRef<HTMLInputElement>(null)
+  const commit = useRef(onCommit)
+  useEffect(() => {
+    commit.current = onCommit
+    setDraft(value)
+  }, [onCommit, value])
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const on = () => commit.current(el.value.toLowerCase())
+    el.addEventListener('change', on)
+    return () => el.removeEventListener('change', on)
+  }, [])
+  return <input ref={ref} type="color" aria-label="Özel renk" value={draft} onChange={(e) => setDraft(e.target.value)} />
 }
 
 export function ColorChoices({ value, onChange, noneLabel }: Props) {
@@ -30,7 +49,7 @@ export function ColorChoices({ value, onChange, noneLabel }: Props) {
       ))}
       <label className={`color-custom${sel !== null && !preset ? ' on' : ''}`}>
         Özel
-        <input type="color" aria-label="Özel renk" value={sel ?? '#3b82f6'} onChange={(e) => onChange(e.target.value.toLowerCase())} />
+        <ColorInput value={sel ?? '#3b82f6'} onCommit={onChange} />
       </label>
     </div>
   )

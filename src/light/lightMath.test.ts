@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { hueForBpm, levelFromDb, pulseFromPhase, takePhase, freePhase, breath } from './lightMath'
+import { hueForBpm, levelFromDb, pulseFromPhase, takePhase, freePhase, breath, hexToHue as _h2h, hexSaturation as _hs, hueFor as _hf } from './lightMath'
 
 const plan = { clickTimes: [10.1, 10.6], downbeat: 11.1, bpm: 120 }
 
@@ -55,7 +55,6 @@ describe('lightMath', () => {
   })
 })
 
-import { hexToHue as _h2h, hexSaturation as _hs, hueFor as _hf } from './lightMath'
 describe('light color math', () => {
   it('hexToHue', () => {
     expect(_h2h('#ef4444')).toBeCloseTo(0, 0)
@@ -67,7 +66,8 @@ describe('light color math', () => {
     expect(_hs('#3b82f6')).toBeGreaterThan(0.9)
   })
   it('hueFor: fixed ignores level; auto adds it', () => {
-    expect(_hf(120, 0, '#22c55e')).toBe(_hf(120, 1, '#22c55e'))
+    expect(_hf(120, 0, 142)).toBe(142)
+    expect(_hf(120, 1, 142)).toBe(142)
     expect(_hf(60, 0.5, null)).toBe(245)
     expect(_hf(null, 0, null)).toBe(205)
   })

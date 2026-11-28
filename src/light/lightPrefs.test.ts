@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { getLightMode, setLightMode, onLightModeChange } from './lightPrefs'
+import { getLightMode, setLightMode, onLightModeChange, effectiveLightColor, getLightColor, setLightColor, onLightColorChange } from './lightPrefs'
 
 beforeEach(() => localStorage.clear())
 afterEach(() => vi.restoreAllMocks())
@@ -33,7 +33,6 @@ describe('lightPrefs', () => {
   })
 })
 
-import { effectiveLightColor, getLightColor, setLightColor, onLightColorChange } from './lightPrefs'
 describe('light color pref', () => {
   it('defaults to auto; invalid stored → auto', () => {
     expect(getLightColor()).toBe('auto')

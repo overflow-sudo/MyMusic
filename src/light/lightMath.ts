@@ -72,8 +72,8 @@ export function hexSaturation(hex: string): number {
 
 export const SAT_FLOOR = 0.4
 
-/** Hue to paint: a fixed color wins and ignores the guitar level; otherwise tempo hue plus level. */
-export function hueFor(bpm: number | null, level: number, color: string | null): number {
-  if (color) return hexToHue(color)
+/** Hue to paint: a fixed hue (from hexToHue) wins and ignores the guitar level; otherwise tempo hue plus level. */
+export function hueFor(bpm: number | null, level: number, fixedHue: number | null): number {
+  if (fixedHue !== null) return fixedHue
   return (bpm === null ? 205 : hueForBpm(bpm)) + level * 30
 }

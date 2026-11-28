@@ -14,7 +14,7 @@ const prefersReducedMotion = () => {
 }
 
 /** Chosen color's hue (level ignored) or the tempo hue plus level. */
-const paintHue = (lvl: number) => lightBus.getFixedHue() ?? hueFor(lightBus.getHueBpm(), lvl, null)
+const paintHue = (lvl: number) => hueFor(lightBus.getHueBpm(), lvl, lightBus.getFixedHue())
 
 /** Only a chosen color overrides the CSS default saturation, so auto keeps today's look. */
 const paintSat = (style: CSSStyleDeclaration) => {

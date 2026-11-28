@@ -306,7 +306,20 @@ describe('SongDetail layout and settings drawer', () => {
     await waitFor(() => expect(patches).toContainEqual({ lightColor: '#ef4444' }))
     expect(within(group).getByRole('button', { name: 'Kırmızı' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(within(group).getByRole('button', { name: 'Genel' }))
-    await waitFor(() => expect(patches).toContainEqual({ lightColor: undefined }))
+    await waitFor(() => expect(patches.some((p) => Object.prototype.hasOwnProperty.call(p, 'lightColor') && p.lightColor === undefined)).toBe(true))
+    await screen.findByText('Henüz kayıt yok.')
+  })
+
+  it('Özel color: dragging (input events) saves nothing; the native change saves once', async () => {
+    const { patches } = setup()
+    openDrawer()
+    const input = screen.getByLabelText('Özel renk') as HTMLInputElement
+    fireEvent.input(input, { target: { value: '#111111' } })
+    fireEvent.input(input, { target: { value: '#222222' } })
+    fireEvent.input(input, { target: { value: '#333333' } })
+    expect(patches).toHaveLength(0)
+    fireEvent.change(input, { target: { value: '#333333' } })
+    await waitFor(() => expect(patches).toEqual([{ lightColor: '#333333' }]))
     await screen.findByText('Henüz kayıt yok.')
   })
 
