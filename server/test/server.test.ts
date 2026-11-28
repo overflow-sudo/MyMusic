@@ -11,17 +11,23 @@ let h: Harness
 afterEach(async () => { await h?.stop(); vi.restoreAllMocks() })
 
 describe('config', () => {
+  it('rejects the placeholder or a short SIGNING_SECRET', () => {
+    const pw = 'a-long-enough-pw'
+    expect(() => loadConfig({ OWNER_PASSWORD: pw, SIGNING_SECRET: 'change-me-to-a-long-random-string' })).toThrow(/SIGNING_SECRET/)
+    expect(() => loadConfig({ OWNER_PASSWORD: pw, SIGNING_SECRET: 'x'.repeat(31) })).toThrow(/at least 32/)
+    expect(() => loadConfig({ OWNER_PASSWORD: pw, SIGNING_SECRET: 'x'.repeat(32) })).not.toThrow()
+  })
   it('throws without OWNER_PASSWORD or SIGNING_SECRET', () => {
     expect(() => loadConfig({ SIGNING_SECRET: 'x' })).toThrow(/OWNER_PASSWORD/)
     expect(() => loadConfig({ OWNER_PASSWORD: 'x' })).toThrow(/SIGNING_SECRET/)
   })
   it('rejects the placeholder and short passwords', () => {
-    expect(() => loadConfig({ OWNER_PASSWORD: 'change-me', SIGNING_SECRET: 'b' })).toThrow(/OWNER_PASSWORD must be changed/)
-    expect(() => loadConfig({ OWNER_PASSWORD: 'short-pw-11', SIGNING_SECRET: 'b' })).toThrow(/at least 12/)
-    expect(() => loadConfig({ OWNER_PASSWORD: 'twelve-chars', SIGNING_SECRET: 'b' })).not.toThrow()
+    expect(() => loadConfig({ OWNER_PASSWORD: 'change-me', SIGNING_SECRET: 'b'.repeat(32) })).toThrow(/OWNER_PASSWORD must be changed/)
+    expect(() => loadConfig({ OWNER_PASSWORD: 'short-pw-11', SIGNING_SECRET: 'b'.repeat(32) })).toThrow(/at least 12/)
+    expect(() => loadConfig({ OWNER_PASSWORD: 'twelve-chars', SIGNING_SECRET: 'b'.repeat(32) })).not.toThrow()
   })
   it('applies defaults', () => {
-    const c = loadConfig({ OWNER_PASSWORD: 'a-long-enough-pw', SIGNING_SECRET: 'b' })
+    const c = loadConfig({ OWNER_PASSWORD: 'a-long-enough-pw', SIGNING_SECRET: 'b'.repeat(32) })
     expect(c.port).toBe(8120)
     expect(c.publicUrl).toBe('https://music.emiraksu.me')
     expect(c.maxUploadBytes).toBe(4294967296)

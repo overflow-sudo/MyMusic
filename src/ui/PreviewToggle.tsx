@@ -7,7 +7,10 @@ export default function PreviewToggle({ hidden, onChange }: { hidden: boolean; o
       data-keeps-space
       aria-label={hidden ? 'Önizlemeyi göster' : 'Önizlemeyi gizle'}
       aria-pressed={hidden}
-      onClick={() => onChange(!hidden)}
+      onClick={(e) => {
+        if (e.detail > 0) e.currentTarget.blur() // after a mouse click Space must still start a take
+        onChange(!hidden)
+      }}
     >
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />

@@ -48,7 +48,13 @@ describe('useSongLight color', () => {
     expect(lightBus.getFixedHue()).toBeNull()
   })
   it('floors saturation at 40%', () => {
-    renderHook(() => useSongLight(100, { lightColor: '#808080' }))
+    renderHook(() => useSongLight(100, { lightColor: '#7a8f7a' }))
     expect(lightBus.getFixedSat()).toBe(0.4)
+  })
+  it('a neutral (near-grey) color keeps saturation 0: no 40% floor', () => {
+    renderHook(() => useSongLight(100, { lightColor: '#808080' }))
+    expect(lightBus.getFixedSat()).toBe(0)
+    renderHook(() => useSongLight(100, { lightColor: '#ffffff' }))
+    expect(lightBus.getFixedSat()).toBe(0)
   })
 })

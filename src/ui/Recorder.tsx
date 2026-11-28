@@ -289,10 +289,10 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
       )}
       <div className="rec-bar">
         <div className="seg rec-mode" role="group" aria-label="Kayıt türü">
-          <button type="button" aria-pressed={mode === 'ses'} disabled={busy} onClick={() => (mode !== 'ses' || !stream) && chooseMode('ses')}>
+          <button type="button" aria-pressed={mode === 'ses'} disabled={busy} onClick={(e) => { if (e.detail > 0) e.currentTarget.blur(); if (mode !== 'ses' || !stream) chooseMode('ses') }}>
             Ses
           </button>
-          <button type="button" aria-pressed={mode === 'video'} disabled={busy} onClick={() => (mode !== 'video' || !stream) && chooseMode('video')}>
+          <button type="button" aria-pressed={mode === 'video'} disabled={busy} onClick={(e) => { if (e.detail > 0) e.currentTarget.blur(); if (mode !== 'video' || !stream) chooseMode('video') }}>
             Video
           </button>
         </div>

@@ -17,7 +17,7 @@ export interface Harness {
 
 export async function start(env: Record<string, string> = {}, appOpts: AppOpts = {}): Promise<Harness> {
   const dir = mkdtempSync(join(tmpdir(), 'mm-server-'))
-  const config = loadConfig({ OWNER_PASSWORD: PASSWORD, SIGNING_SECRET: 'dummy-secret', DATA_DIR: dir, ...env })
+  const config = loadConfig({ OWNER_PASSWORD: PASSWORD, SIGNING_SECRET: 'dummy-secret-dummy-secret-dummy-secret', DATA_DIR: dir, ...env })
   const logs: string[] = []
   const logger: Logger = {
     info: (m, f) => { logs.push(JSON.stringify([m, f])) },

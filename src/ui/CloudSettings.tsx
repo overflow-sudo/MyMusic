@@ -92,6 +92,8 @@ export default function CloudSettings({ onSyncNow = () => {}, fetchImpl }: Props
       <p className="muted" role="status">
         {STATE_TEXT[status.state]}
         {status.state === 'syncing' && status.progress ? ` · ${status.progress}` : ''}
+        {status.lastError ? ` · ${status.lastError}` : ''}
+        {status.lastSyncAt ? ` · Son eşitleme: ${new Date(status.lastSyncAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}` : ''}
       </p>
       {error && <p className="note" role="alert">{error}</p>}
       <div className="row">

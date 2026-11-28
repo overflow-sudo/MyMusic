@@ -12,7 +12,7 @@ describe('built server', () => {
     const port = 20000 + Math.floor(Math.random() * 20000)
     const child = spawn('node', ['dist/server/src/main.js'], {
       cwd: root, stdio: 'ignore',
-      env: { ...process.env, OWNER_PASSWORD: 'dummy-password-123', SIGNING_SECRET: 'dummy', DATA_DIR: dir, PORT: String(port) },
+      env: { ...process.env, OWNER_PASSWORD: 'dummy-password-123', SIGNING_SECRET: 'dummy-secret-dummy-secret-dummy-secret', DATA_DIR: dir, PORT: String(port) },
     })
     try {
       let ok = false

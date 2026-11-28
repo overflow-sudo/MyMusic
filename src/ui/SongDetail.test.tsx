@@ -287,6 +287,18 @@ describe('SongDetail layout and settings drawer', () => {
     await screen.findByText('Henüz kayıt yok.')
   })
 
+  it('a mouse click on ⚙ does not leave it focused (Space keeps starting a take)', () => {
+    setup()
+    const gear = screen.getByRole('button', { name: 'Şarkı ayarları' })
+    const blur = vi.spyOn(gear, 'blur')
+    fireEvent.click(gear, { detail: 0 })
+    expect(blur).not.toHaveBeenCalled()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.click(screen.getByRole('button', { name: 'Şarkı ayarları' }), { detail: 1 })
+    expect(blur).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('dialog', { name: 'Şarkı ayarları' })).toBeInTheDocument()
+  })
+
   it('backdrop click closes the drawer', async () => {
     const { container } = render(
       <SongDetail song={base} root={createMemoryDir()} onBack={() => {}} patchSong={async () => {}} deleteSong={async () => {}} />,

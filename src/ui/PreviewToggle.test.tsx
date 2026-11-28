@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { startTake, type TakeOptions } from '../audio/engine'
 import { createSong } from '../domain/library'
 import { createMemoryDir } from '../storage/memoryDir'
+import PreviewToggle from './PreviewToggle'
 import Recorder from './Recorder'
 import SongDetail from './SongDetail'
 import { setPreviewHidden } from './usePreviewHidden'
@@ -141,5 +142,20 @@ describe('preview toggle', () => {
     const area = document.querySelector('.stage-area.has-chords')!
     expect(area.querySelector('.rec-stage-hidden')).not.toBeNull()
     expect(area.querySelector('.chords-panel')).not.toBeNull()
+  })
+})
+
+describe('PreviewToggle focus', () => {
+  it('a mouse click blurs the button so Space keeps starting a take; keyboard activation keeps focus', () => {
+    const onChange = vi.fn()
+    render(<PreviewToggle hidden={false} onChange={onChange} />)
+    const b = screen.getByRole('button', { name: 'Önizlemeyi gizle' })
+    b.focus()
+    fireEvent.click(b, { detail: 1 })
+    expect(onChange).toHaveBeenCalledWith(true)
+    expect(b).not.toHaveFocus()
+    b.focus()
+    fireEvent.click(b, { detail: 0 })
+    expect(b).toHaveFocus()
   })
 })

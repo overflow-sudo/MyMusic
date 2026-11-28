@@ -129,6 +129,7 @@ npm run build   # üretim derlemesi (dist/)
 - **Bulut**: yalnız bulutta (bu bilgisayarda dosya yok; oynat ve indir yine çalışır).
 - **Bilgisayar**: yalnız bu bilgisayarda (henüz yüklenmedi).
 - **Yukarı ok**: yükleniyor. **Saat**: sunucu kaydı telefon uyumlu biçime hazırlıyor.
+- **Bulutta (dönüştürülemedi)**: dosya sunucuya ulaştı ama telefon uyumlu biçime çevrilemedi; özgün dosya bu bilgisayarda durur, silinmez.
 
 Yalnız bulutta olan kayıt oynatılırken sunucudan geçici bir bağlantı alınır; **İndir** sunucudaki MP4 / M4A dosyasını indirir.
 
@@ -141,7 +142,7 @@ Yalnız bulutta olan kayıt oynatılırken sunucudan geçici bir bağlantı alı
 
 ### Silme
 
-**Sil**, "Bu kayıt bu bilgisayardan ve buluttan silinsin mi?" diye sorar; onaylarsan kayıt hem bu bilgisayardan hem sunucudan silinir, diğer bilgisayardaki kopyası da eşitlemeyle silinir. Yalnız bulutta olan bir kaydı silmek sunucudaki kaydı siler. Silinen şarkı da diğer bilgisayarlardan kalkar.
+**Sil**, "Bu kayıt bu bilgisayardan ve buluttan silinsin mi?" diye sorar; onaylarsan kayıt hem bu bilgisayardan hem sunucudan silinir, diğer bilgisayardaki kopyası da eşitlemeyle silinir. Yalnız bulutta olan bir kaydı silmek sunucudaki kaydı siler. Silinen şarkı da diğer bilgisayarlardan kalkar. Bulut bağlı değilken (çıkış yapılmışken) yapılan bir Sil buluta iletilmez; kayıt yalnız bu bilgisayardan silinir.
 
 ### İnternet yokken
 

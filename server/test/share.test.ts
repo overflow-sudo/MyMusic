@@ -228,4 +228,18 @@ describe('phone page and cookie session', () => {
     expect(out.headers.get('set-cookie')).toMatch(/^mm_session=;.*Max-Age=0/)
     expect((await fetch(`${h.base}/m/recordings`, { headers: c })).status).toBe(401)
   })
+
+  it('DELETE /m/recordings/:id deletes (tombstone) with cookie+Origin only', async () => {
+    const { api } = await boot()
+    const id = await rec(api)
+    const c = { Cookie: cookieOf(await login2(ORIGIN)) }
+    const del = (headers: Record<string, string>) => fetch(`${h.base}/m/recordings/${id}`, { method: 'DELETE', headers })
+    expect((await del({})).status).toBe(401)
+    expect((await del(c)).status).toBe(403)
+    expect((await del({ ...c, Origin: 'https://evil.test' })).status).toBe(403)
+    expect(h.app.db.prepare('SELECT COUNT(*) AS n FROM recordings').get()).toEqual({ n: 1 })
+    expect((await del({ ...c, Origin: ORIGIN })).status).toBe(204)
+    expect(h.app.db.prepare('SELECT COUNT(*) AS n FROM recordings').get()).toEqual({ n: 0 })
+    expect(h.app.db.prepare('SELECT id FROM recording_tombstones WHERE id = ?').get(id)).toBeTruthy()
+  })
 })

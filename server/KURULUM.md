@@ -13,6 +13,8 @@ sudo git clone https://github.com/overflow-sudo/MyMusic.git /opt/mymusic
 sudo chown -R "$USER": /opt/mymusic
 ```
 
+Repo özelse (private) `git clone` kimlik ister: GitHub'da yalnız bu repoya okuma yetkili bir kişisel erişim anahtarı (token) oluşturup `https://<token>@github.com/overflow-sudo/MyMusic.git` ile klonla ya da sunucuya bir deploy key (salt okunur SSH anahtarı) ekleyip `git@github.com:overflow-sudo/MyMusic.git` adresini kullan. Anahtarı repoya veya `.env`'e koyma.
+
 ## 3. `.env` dosyasını oluştur
 
 ```bash

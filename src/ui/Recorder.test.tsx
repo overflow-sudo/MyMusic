@@ -89,6 +89,19 @@ describe('Recorder', () => {
     expect(screen.getByText("Tık kayda girmesin: Voicemeeter'da tarayıcı sesini yalnızca A1'e (kulaklık) gönder, B hattına gönderme.")).toBeInTheDocument()
   })
 
+  it('a mouse click on the Ses/Video segment leaves no focus (Space keeps starting a take); keyboard activation keeps it', async () => {
+    renderRecorder(plain)
+    await chooseAudio()
+    const video = screen.getByRole('button', { name: 'Video' })
+    video.focus()
+    fireEvent.click(video, { detail: 1 })
+    expect(video).not.toHaveFocus()
+    const ses = screen.getByRole('button', { name: 'Ses' })
+    ses.focus()
+    fireEvent.click(ses, { detail: 0 })
+    expect(ses).toHaveFocus()
+  })
+
   it('starting a take pauses every player before startTake', async () => {
     const el = document.createElement('audio')
     const pause = vi.spyOn(el, 'pause').mockImplementation(() => {})

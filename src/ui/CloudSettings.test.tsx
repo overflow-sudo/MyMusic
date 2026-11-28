@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resetCloudStatus } from '../cloud/status'
+import { markSynced, resetCloudStatus, setCloudStatus } from '../cloud/status'
 import SettingsDialog from './SettingsDialog'
 
 const jr = (body: unknown, init: ResponseInit = {}) => new Response(JSON.stringify(body), { status: 200, ...init })
@@ -38,6 +38,17 @@ describe('CloudSettings', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Şifre yanlış.')
     expect(localStorage.getItem('mm.cloud')).toBeNull()
     expect(screen.getByRole('status')).toHaveTextContent('Bağlı değil')
+  })
+
+  it('status line shows the last error and the last sync time', () => {
+    localStorage.setItem('mm.cloud', JSON.stringify({ baseUrl: 'https://music.emiraksu.me', token: 't' }))
+    setup(vi.fn() as unknown as typeof fetch)
+    const at = '2026-11-28T09:05:00.000Z'
+    act(() => { markSynced(at); setCloudStatus('offline', 'Sunucuya ulaşılamadı.') })
+    const hhmm = new Date(at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+    const status = screen.getByRole('status')
+    expect(status).toHaveTextContent('Çevrimdışı · Sunucuya ulaşılamadı.')
+    expect(status).toHaveTextContent(`Son eşitleme: ${hhmm}`)
   })
 
   it('429 shows the wait message', async () => {

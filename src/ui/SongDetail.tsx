@@ -170,7 +170,10 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
             aria-label="Şarkı ayarları"
             aria-expanded={drawerOpen}
             disabled={busy}
-            onClick={() => setDrawerOpen(true)}
+            onClick={(e) => {
+              if (e.detail > 0) e.currentTarget.blur()
+              setDrawerOpen(true)
+            }}
           >
             ⚙
           </button>

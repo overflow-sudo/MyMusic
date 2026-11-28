@@ -105,7 +105,8 @@ function recView(r, showSong) {
   const actions = el('div', { class: 'actions' },
     el('button', { onclick: () => share(r) }, 'Paylaş'),
     r.shared ? el('button', { class: 'quiet', onclick: () => unshare(r) }, 'Paylaşımı kaldır') : null,
-    processing ? null : el('button', { class: 'quiet', onclick: () => download(r.id) }, 'İndir'))
+    processing ? null : el('button', { class: 'quiet', onclick: () => download(r.id) }, 'İndir'),
+    el('button', { class: 'quiet', onclick: () => remove(r) }, 'Sil'))
   row.append(actions)
   if (state.shareUrl[r.id]) row.append(el('input', { class: 'share-url', type: 'text', readOnly: true, value: state.shareUrl[r.id], onfocus: (e) => e.target.select() }))
   return row
@@ -131,6 +132,15 @@ async function share(r) {
   } else if (navigator.clipboard) {
     try { await navigator.clipboard.writeText(url) } catch { /* the visible field below is the fallback */ }
   }
+  render()
+}
+
+async function remove(r) {
+  if (!confirm('Bu kayıt buluttan silinsin mi?')) return
+  try { await call('DELETE', `/m/recordings/${r.id}`) } catch { return }
+  state.data.recordings = state.data.recordings.filter((x) => x.id !== r.id)
+  delete state.shareUrl[r.id]; delete state.urls[r.id]
+  if (state.open === r.id) state.open = null
   render()
 }
 

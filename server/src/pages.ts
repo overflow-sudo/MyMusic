@@ -66,5 +66,6 @@ export function registerPageRoutes(router: Router, deps: { auth: Auth; recording
   router.add('GET', '/m/recordings/:id/url', (ctx) => recordings.signedUrl(ctx.params.id, ctx.url.searchParams.get('download') === '1'), { cookie: true })
   router.add('POST', '/m/recordings/:id/share', (ctx) => shares.create(ctx.params.id), { cookie: true })
   router.add('DELETE', '/m/recordings/:id/share', (ctx) => { shares.revoke(ctx.params.id); ctx.res.writeHead(204); ctx.res.end() }, { cookie: true })
+  router.add('DELETE', '/m/recordings/:id', async (ctx) => { await recordings.remove(ctx.params.id); ctx.res.writeHead(204); ctx.res.end() }, { cookie: true })
   router.add('GET', '/m/songs/:id/cover', (ctx) => files.serve(ctx, 'cover'), { cookie: true })
 }
