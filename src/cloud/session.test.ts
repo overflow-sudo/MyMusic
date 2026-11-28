@@ -42,3 +42,7 @@ describe('session store', () => {
     expect(() => setSession({ baseUrl: 'http://evil.example', token: 't' })).toThrow()
   })
 })
+
+it('allows http on IPv6 loopback', () => {
+  expect(normalizeBaseUrl('http://[::1]:8120/')).toBe('http://[::1]:8120')
+})

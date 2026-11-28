@@ -4,14 +4,17 @@ const KEY = 'mm.cloud'
 export interface Session { baseUrl: string; token: string }
 
 const listeners = new Set<() => void>()
-const emit = () => { for (const l of [...listeners]) l() }
+let generation = 0
+/** Bumps whenever the session is set or cleared; in-flight requests of an older generation must not touch status. */
+export const sessionGeneration = (): number => generation
+const emit = () => { generation++; for (const l of [...listeners]) l() }
 
 /** Trims, strips trailing slashes; https only (http allowed for localhost). Null when invalid. */
 export function normalizeBaseUrl(input: string): string | null {
   const s = input.trim().replace(/\/+$/, '')
   let u: URL
   try { u = new URL(s) } catch { return null }
-  const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1'
+  const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '[::1]'
   if (u.protocol !== 'https:' && !(u.protocol === 'http:' && local)) return null
   if (!u.hostname || u.username || u.password || u.search || u.hash || u.pathname !== '/') return null
   return u.origin

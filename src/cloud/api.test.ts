@@ -7,7 +7,7 @@ const json = (body: unknown, init: ResponseInit = {}) =>
   new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' }, ...init })
 
 beforeEach(() => { resetCloudStatus(); setCloudStatus('connected') })
-afterEach(() => vi.useRealTimers())
+afterEach(() => { vi.useRealTimers() })
 
 describe('createApi', () => {
   it('login posts the password and returns the token; no auth header', async () => {
@@ -118,5 +118,117 @@ describe('createApi', () => {
     expect(await file.blob.text()).toBe('abc')
     await api.deleteFile('s1', 'track')
     expect(f.mock.calls.at(-1)![0]).toBe('https://s.example/api/songs/s1/track')
+  })
+})
+
+describe('upload primitives', () => {
+  const mk = (f: unknown) => createApi(session, f as typeof fetch)
+  it('createUpload / putPart / completeUpload / abortUpload requests', async () => {
+    const f = vi.fn(async (_u: string, _i: RequestInit) => json({ uploadId: 'u', size: 3, id: 'x' }))
+    const api = mk(f)
+    await api.createUpload()
+    const blob = new Blob(['abc'])
+    await api.putPart('u', 0, blob)
+    await api.putPart('u', 2, blob)
+    await api.completeUpload('u', { target: 'track', songId: 's' })
+    await api.abortUpload('u')
+    const c = f.mock.calls
+    expect(c.map(([u, i]) => `${i.method} ${u}`)).toEqual([
+      'POST https://s.example/api/uploads', 'PUT https://s.example/api/uploads/u/0', 'PUT https://s.example/api/uploads/u/2',
+      'POST https://s.example/api/uploads/u/complete', 'DELETE https://s.example/api/uploads/u',
+    ])
+    for (const [, i] of c) expect((i.headers as Record<string, string>).Authorization).toBe('Bearer tok123')
+    expect(c[1][1].body).toBe(blob)
+    expect((c[3][1].headers as Record<string, string>)['Content-Type']).toBe('application/json')
+    expect(JSON.parse(c[3][1].body as string)).toEqual({ target: 'track', songId: 's' })
+  })
+
+  const hang = () => vi.fn((_u: string, init: RequestInit) => new Promise<Response>((_r, rej) => {
+    init.signal!.addEventListener('abort', () => rej(new DOMException('aborted', 'AbortError')))
+  }))
+
+  it('part times out after 5 min (offline), but not before', async () => {
+    vi.useFakeTimers()
+    const p = mk(hang()).putPart('u', 0, new Blob(['a'])).catch((x) => x)
+    await vi.advanceTimersByTimeAsync(5 * 60_000 - 100)
+    let settled = false
+    void p.then(() => { settled = true })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(200)
+    expect((await p).kind).toBe('offline')
+  })
+
+  it('complete tolerates 20 s, times out at 10 min with phase complete', async () => {
+    vi.useFakeTimers()
+    const p = mk(hang()).completeUpload('u', { target: 'recording' }).catch((x) => x)
+    await vi.advanceTimersByTimeAsync(60_000)
+    let settled = false
+    void p.then(() => { settled = true })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    const e = await p
+    expect(e.kind).toBe('offline')
+    expect(e.phase).toBe('complete')
+  })
+
+  it('caller abort during a part -> client error, status untouched', async () => {
+    const ac = new AbortController()
+    const p = mk(hang()).putPart('u', 0, new Blob(['a']), { signal: ac.signal }).catch((x) => x)
+    ac.abort()
+    expect((await p).kind).toBe('client')
+    expect(getCloudStatus().state).toBe('connected')
+  })
+})
+
+describe('body reads', () => {
+  it('getFile times out while the body stalls', async () => {
+    vi.useFakeTimers()
+    const f = vi.fn((_u: string, init: RequestInit) => {
+      const body = new ReadableStream({ start(c) { init.signal!.addEventListener('abort', () => c.error(new TypeError('terminated'))) } })
+      return Promise.resolve(new Response(body))
+    })
+    const p = createApi(session, f as unknown as typeof fetch).getFile('s', 'track').catch((x) => x)
+    await vi.advanceTimersByTimeAsync(10 * 60_000 + 100)
+    expect((await p).kind).toBe('offline')
+    expect(getCloudStatus().state).toBe('offline')
+  })
+  it('mid-body failure on JSON is offline, not server', async () => {
+    const body = new ReadableStream({ start(c) { c.error(new TypeError('reset')) } })
+    const e = await createApi(session, async () => new Response(body)).getLibrary().catch((x) => x)
+    expect(e.kind).toBe('offline')
+  })
+  it('caller abort stops a stalled download', async () => {
+    const ac = new AbortController()
+    const f = (_u: string, init: RequestInit) => {
+      const body = new ReadableStream({ start(c) { init.signal!.addEventListener('abort', () => c.error(new TypeError('x'))) } })
+      return Promise.resolve(new Response(body))
+    }
+    const p = createApi(session, f as unknown as typeof fetch).getFile('s', 'cover', { signal: ac.signal }).catch((x) => x)
+    await new Promise((r) => setTimeout(r, 5))
+    ac.abort()
+    expect((await p).kind).toBe('client')
+  })
+})
+
+describe('misc', () => {
+  it('login with an empty token is a server error', async () => {
+    const e = await createApi({ baseUrl: 'https://s.example', token: null }, async () => json({ token: '' })).login('x').catch((x) => x)
+    expect(e.kind).toBe('server')
+  })
+  it('status updates from a replaced session are ignored', async () => {
+    const { setSession } = await import('./session')
+    const api = createApi(session, async () => json({}, { status: 401 }))
+    setSession({ baseUrl: 'https://other.example', token: 'n' })
+    await api.getLibrary().catch(() => undefined)
+    expect(getCloudStatus().state).toBe('connected')
+    localStorage.clear()
+  })
+  it('parses an HTTP-date Retry-After', async () => {
+    const d = new Date(Date.now() + 120_000).toUTCString()
+    const e = await createApi(session, async () => json({}, { status: 429, headers: { 'Retry-After': d } })).login('x').catch((x) => x)
+    expect(e.retryAfter).toBeGreaterThan(100)
+    expect(e.retryAfter).toBeLessThanOrEqual(120)
   })
 })

@@ -76,3 +76,23 @@ describe('uploadBlob', () => {
     expect(api.abortUpload).toHaveBeenCalled()
   })
 })
+
+describe('uploadBlob abort retry and rate', () => {
+  it('retries abort once after 2 s on conflict', async () => {
+    vi.useFakeTimers()
+    let n = 0
+    const { api } = fakeApi({
+      putPart: vi.fn(async () => { throw new CloudError('offline', 'timeout') }),
+      abortUpload: vi.fn(async () => { if (n++ === 0) throw new CloudError('conflict', 'in flight', { status: 409 }) }),
+    } as Partial<CloudApi>)
+    const p = uploadBlob(api, new Blob(['a']), { target: 'track', songId: 's' }).catch((x) => x)
+    await vi.advanceTimersByTimeAsync(2100)
+    expect((await p).kind).toBe('offline')
+    expect(api.abortUpload).toHaveBeenCalledTimes(2)
+    vi.useRealTimers()
+  })
+  it('429 on create surfaces as rate with retryAfter', async () => {
+    const { api } = fakeApi({ createUpload: vi.fn(async () => { throw new CloudError('rate', 'x', { retryAfter: 60 }) }) } as Partial<CloudApi>)
+    await expect(uploadBlob(api, new Blob(['a']), { target: 'track', songId: 's' })).rejects.toMatchObject({ kind: 'rate', retryAfter: 60 })
+  })
+})

@@ -97,6 +97,8 @@ describe('http + auth', () => {
     const ok = 'https://overflow-sudo.github.io'
     const r = await fetch(h.base + '/health', { headers: { Origin: ok } })
     expect(r.headers.get('access-control-allow-origin')).toBe(ok)
+    expect(r.headers.get('access-control-expose-headers')).toContain('X-Content-SHA256')
+    expect(r.headers.get('access-control-expose-headers')).toContain('Retry-After')
     const bad = await fetch(h.base + '/health', { headers: { Origin: 'https://evil.example' } })
     expect(bad.headers.get('access-control-allow-origin')).toBeNull()
     const pre = await fetch(h.base + '/api/library', { method: 'OPTIONS', headers: { Origin: ok, 'Access-Control-Request-Method': 'GET' } })

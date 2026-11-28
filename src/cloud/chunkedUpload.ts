@@ -8,6 +8,9 @@ export interface UploadOpts { onProgress?: (sentBytes: number, totalBytes: numbe
  * Uploads `blob` in 32 MiB parts, then completes with `completeBody` (must include `target`).
  * Any failure aborts the server-side upload (best effort) and rethrows; the caller restarts from part 0
  * on its next pass. Returns the complete call's JSON.
+ * Errors for the caller (Task 11): a 429 from create is CloudError kind 'rate' (with retryAfter); a timeout of the
+ * complete call is kind 'offline' with phase 'complete' - the server may have created the item, so verify via
+ * getRecordings before re-uploading.
  */
 export async function uploadBlob(
   api: CloudApi,
@@ -31,7 +34,18 @@ export async function uploadBlob(
     if (signal?.aborted) throw new CloudError('client', 'Aborted')
     return await api.completeUpload(uploadId, completeBody, { signal })
   } catch (e) {
-    try { await api.abortUpload(uploadId) } catch { /* best effort */ }
+    await abortBestEffort(api, uploadId)
     throw e
   }
+}
+
+export const ABORT_RETRY_MS = 2000
+
+/** A timed-out part is usually still in flight server-side (409): retry the abort once after a short wait. */
+async function abortBestEffort(api: CloudApi, uploadId: string): Promise<void> {
+  try { await api.abortUpload(uploadId); return } catch (e) {
+    if (!(e instanceof CloudError && e.kind === 'conflict')) return
+  }
+  await new Promise((r) => setTimeout(r, ABORT_RETRY_MS))
+  try { await api.abortUpload(uploadId) } catch { /* best effort */ }
 }
