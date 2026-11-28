@@ -42,6 +42,8 @@ export function sendJson(res: ServerResponse, status: number, data: unknown, hea
 }
 
 export async function readJson(req: IncomingMessage, max = JSON_MAX_BYTES): Promise<unknown> {
+  const declared = Number(req.headers['content-length'])
+  if (Number.isFinite(declared) && declared > max) throw new HttpError(413, 'Body too large')
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of req) {
@@ -79,7 +81,8 @@ export class Router {
   }
 
   private match(method: string, pathname: string): { route: Route; params: Record<string, string> } | 'method' | null {
-    const segs = pathname.split('/').filter(Boolean)
+    // Strict split: '//api/x' must not collapse onto '/api/x'.
+    const segs = pathname.split('/').slice(1)
     let pathMatched = false
     for (const route of this.routes) {
       if (route.parts.length !== segs.length) continue
@@ -93,7 +96,7 @@ export class Router {
       }
       if (!ok) continue
       pathMatched = true
-      if (route.method === method) return { route, params }
+      if (route.method === method || (method === 'HEAD' && route.method === 'GET')) return { route, params }
     }
     return pathMatched ? 'method' : null
   }
@@ -107,16 +110,24 @@ export class Router {
       Vary: 'Origin',
       'Access-Control-Allow-Headers': ALLOW_HEADERS,
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Expose-Headers': 'Retry-After',
       'Access-Control-Max-Age': '600',
     }
   }
 
   handler = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    const url = new URL(req.url ?? '/', 'http://local')
     const method = req.method ?? 'GET'
     const cors = this.cors(req)
     let status = 500
+    let logPath = '?'
     try {
+      // Never let URL treat a leading '//' as an authority: prefix the path ourselves.
+      const target = req.url ?? '/'
+      if (!target.startsWith('/')) throw new HttpError(400, 'Bad request target')
+      let url: URL
+      try { url = new URL('http://local' + target) } catch { throw new HttpError(400, 'Bad request target') }
+      logPath = url.pathname
+      for (const [k, v] of Object.entries(cors ?? {})) res.setHeader(k, v)
       if (method === 'OPTIONS') {
         if (!cors || !req.headers.origin) throw new HttpError(403, 'Origin not allowed')
         status = 204
@@ -131,7 +142,6 @@ export class Router {
       const body = m.route.json && method !== 'GET' && method !== 'HEAD' ? await readJson(req) : undefined
       const result = await m.route.handler({ req, res, url, params: m.params, ip: clientIp(req), body })
       if (!res.headersSent) {
-        for (const [k, v] of Object.entries(cors ?? {})) res.setHeader(k, v)
         status = 200
         sendJson(res, 200, result ?? { ok: true })
       } else status = res.statusCode
@@ -143,7 +153,7 @@ export class Router {
       const payload: ApiError = { error: err?.message ?? 'Internal error' }
       sendJson(res, status, payload, { ...(cors ?? {}), ...(err?.headers ?? {}) })
     } finally {
-      this.opts.logger.info('request', { method, path: url.pathname, status })
+      this.opts.logger.info('request', { method, path: logPath, status })
     }
   }
 }

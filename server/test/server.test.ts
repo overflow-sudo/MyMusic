@@ -4,6 +4,7 @@ import { openDb } from '../src/db.ts'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { connect } from 'node:net'
 import { login, PASSWORD, start, type Harness } from './helpers.ts'
 
 let h: Harness
@@ -127,5 +128,41 @@ describe('http + auth', () => {
     consoleLogger.info('x', { authorization: 'Bearer abc', password: 'pw', ok: 1 })
     expect(JSON.stringify(spy.mock.calls)).not.toMatch(/abc|pw"/)
     expect(JSON.stringify(spy.mock.calls)).toContain('"ok":1')
+  })
+
+  const raw = (port: number, line: string) => new Promise<string>((resolve) => {
+    const sock = connect(port, '127.0.0.1', () => sock.write(`${line}\r\nHost: x\r\nConnection: close\r\n\r\n`))
+    let out = ''
+    sock.on('data', (d) => { out += d })
+    sock.on('close', () => resolve(out))
+  })
+
+  it('malformed request target is a 4xx and does not crash the server', async () => {
+    h = await start()
+    const port = Number(new URL(h.base).port)
+    expect(await raw(port, 'GET //[ HTTP/1.1')).toMatch(/^HTTP\/1.1 40[04]/)
+    expect((await fetch(h.base + '/health')).status).toBe(200)
+  })
+
+  it('//api/library is a distinct path, not host "api"', async () => {
+    h = await start()
+    const port = Number(new URL(h.base).port)
+    expect(await raw(port, 'GET //api/library HTTP/1.1')).toMatch(/^HTTP\/1.1 404/)
+  })
+
+  it('CORS headers are set even when the handler writes its own response', async () => {
+    h = await start()
+    h.app.router.add('GET', '/stream', ({ res }) => { res.writeHead(200); res.end('data') }, { auth: false })
+    const ok = 'http://localhost:5173'
+    const r = await fetch(h.base + '/stream', { headers: { Origin: ok } })
+    expect(await r.text()).toBe('data')
+    expect(r.headers.get('access-control-allow-origin')).toBe(ok)
+  })
+
+  it('declared oversize Content-Length is 413 early; HEAD works on GET routes', async () => {
+    h = await start()
+    const port = Number(new URL(h.base).port)
+    expect(await raw(port, 'POST /api/login HTTP/1.1\r\nContent-Length: 9999999')).toMatch(/^HTTP\/1.1 413/)
+    expect((await fetch(h.base + '/health', { method: 'HEAD' })).status).toBe(200)
   })
 })

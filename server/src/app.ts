@@ -23,7 +23,12 @@ export function createApp(config: Config, logger: Logger = consoleLogger): App {
   // Placeholder until Task 5 (library sync).
   router.add('GET', '/api/library', () => ({ songs: [] }))
 
-  const server = createServer((req, res) => { void router.handler(req, res) })
+  const server = createServer((req, res) => {
+    router.handler(req, res).catch((e) => {
+      logger.error('handler crashed', { message: e instanceof Error ? e.message : String(e) })
+      res.destroy()
+    })
+  })
   return {
     server, db, router, auth,
     close: () => new Promise((resolve) => server.close(() => { db.close(); resolve() })),
