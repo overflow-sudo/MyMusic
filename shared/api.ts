@@ -19,9 +19,14 @@ export interface RecordingInfo {
   status: 'processing' | 'ready' | 'failed'
   songTitle: string
   songArtist: string
+  /** True once a share link exists (shareUrl is returned only by the share endpoints). */
+  shared: boolean
   shareUrl?: string
-  deleted?: boolean
 }
+
+/** Deleted recording: the id is kept so other computers delete their copy too. */
+export interface RecordingTombstone { id: string; deleted: true }
+export type RecordingListItem = RecordingInfo | RecordingTombstone
 
 export interface LoginResponse { token: string }
 

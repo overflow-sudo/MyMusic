@@ -7,6 +7,8 @@ import { Files } from './files.ts'
 import { Library } from './library.ts'
 import { Uploads } from './uploads.ts'
 import { registerLibraryRoutes } from './routes.ts'
+import { Recordings, registerRecordingRoutes } from './recordings.ts'
+import { realRunner, Transcoder, type MediaRunner } from './transcode.ts'
 import { consoleLogger, type Logger } from './log.ts'
 
 export interface App {
@@ -16,11 +18,13 @@ export interface App {
   uploads: Uploads
   files: Files
   library: Library
+  recordings: Recordings
+  transcoder: Transcoder
   auth: Auth
   close(): Promise<void>
 }
 
-export function createApp(config: Config, logger: Logger = consoleLogger): App {
+export function createApp(config: Config, logger: Logger = consoleLogger, opts: { media?: MediaRunner; transcodeTimeoutMs?: number } = {}): App {
   const db = openDb(config.dataDir)
   const auth = new Auth(db, config)
   const router = new Router({ allowedOrigins: config.allowedOrigins, logger, authenticate: auth.authenticate })
@@ -31,6 +35,10 @@ export function createApp(config: Config, logger: Logger = consoleLogger): App {
   const library = new Library(db, files)
   const uploads = new Uploads(db, config.dataDir, config.maxUploadBytes)
   registerLibraryRoutes(router, library, files, uploads)
+  const transcoder = new Transcoder(db, files.filesRoot, opts.media ?? realRunner, logger, opts.transcodeTimeoutMs)
+  const recordings = new Recordings(db, files, library, transcoder, config)
+  registerRecordingRoutes(router, recordings, uploads)
+  transcoder.start()
 
   const sweep = () => { uploads.cleanupStaleUploads().catch((e) => logger.error('upload cleanup failed', { message: String(e) })) }
   files.sweepTmp().catch((e) => logger.error('tmp sweep failed', { message: String(e) }))
@@ -45,7 +53,11 @@ export function createApp(config: Config, logger: Logger = consoleLogger): App {
     })
   })
   return {
-    server, db, router, auth, uploads, files, library,
-    close: () => new Promise((resolve) => { clearInterval(timer); server.close(() => { db.close(); resolve() }) }),
+    server, db, router, auth, uploads, files, library, recordings, transcoder,
+    close: async () => {
+      clearInterval(timer)
+      await transcoder.stop()
+      await new Promise<void>((resolve) => server.close(() => { db.close(); resolve() }))
+    },
   }
 }

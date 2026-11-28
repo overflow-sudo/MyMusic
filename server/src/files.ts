@@ -115,8 +115,6 @@ export class Files {
     const row = this.row(songId, kind)
     if (!row) throw new HttpError(404, 'No file')
     const full = join(this.filesRoot, row.path)
-    let size: number
-    try { size = (await stat(full)).size } catch { throw new HttpError(404, 'No file') }
     const headers: Record<string, string | number> = {
       'Content-Type': row.mime ?? 'application/octet-stream',
       'Accept-Ranges': 'bytes',
@@ -125,28 +123,34 @@ export class Files {
       'Content-Security-Policy': 'sandbox',
     }
     if (row.hash) headers['X-Content-SHA256'] = row.hash
-    let start = 0
-    let end = size - 1
-    let status = 200
-    const range = ctx.req.headers.range
-    if (range) {
-      const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim())
-      if (!m || (m[1] === '' && m[2] === '')) throw new HttpError(416, 'Bad range', { 'Content-Range': `bytes */${size}` })
-      if (m[1] === '') {
-        const n = Number(m[2])
-        start = Math.max(0, size - n)
-      } else {
-        start = Number(m[1])
-        if (m[2] !== '') end = Math.min(end, Number(m[2]))
-      }
-      if (start >= size || start > end) throw new HttpError(416, 'Range not satisfiable', { 'Content-Range': `bytes */${size}` })
-      status = 206
-      headers['Content-Range'] = `bytes ${start}-${end}/${size}`
-    }
-    headers['Content-Length'] = end - start + 1
-    ctx.res.writeHead(status, headers)
-    if (ctx.req.method === 'HEAD' || size === 0) { ctx.res.end(); return }
-    await pipeline(createReadStream(full, { start, end }), ctx.res)
+    await serveFile(ctx, full, headers)
   }
 }
 
+/** Streams `full` with single-range support. `headers` are sent as-is (Content-Length/Range added). 404 when missing. */
+export async function serveFile(ctx: Ctx, full: string, headers: Record<string, string | number>): Promise<void> {
+  let size: number
+  try { size = (await stat(full)).size } catch { throw new HttpError(404, 'No file') }
+  let start = 0
+  let end = size - 1
+  let status = 200
+  const range = ctx.req.headers.range
+  if (range) {
+    const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim())
+    if (!m || (m[1] === '' && m[2] === '')) throw new HttpError(416, 'Bad range', { 'Content-Range': `bytes */${size}` })
+    if (m[1] === '') {
+      const n = Number(m[2])
+      start = Math.max(0, size - n)
+    } else {
+      start = Number(m[1])
+      if (m[2] !== '') end = Math.min(end, Number(m[2]))
+    }
+    if (start >= size || start > end) throw new HttpError(416, 'Range not satisfiable', { 'Content-Range': `bytes */${size}` })
+    status = 206
+    headers['Content-Range'] = `bytes ${start}-${end}/${size}`
+  }
+  headers['Content-Length'] = end - start + 1
+  ctx.res.writeHead(status, headers)
+  if (ctx.req.method === 'HEAD' || size === 0) { ctx.res.end(); return }
+  await pipeline(createReadStream(full, { start, end }), ctx.res)
+}
