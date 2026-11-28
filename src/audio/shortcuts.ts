@@ -9,9 +9,11 @@ export function isTypingTarget(target: Target): boolean {
   return OWN_KEYS.has(target.tagName.toUpperCase()) || !!target.isContentEditable || !!target.closest?.('[data-player]')
 }
 
-/** A [data-keeps-space] control (preview toggle) keeps Space for itself only while Space would start a take; stop/cancel still work. */
+const ACTIVATABLE = 'button, a[href], summary, [role="button"], [role="switch"], [role="tab"], [data-keeps-space]'
+
+/** While Space would start a take, a focused control (button, link, ...) keeps it to activate itself natively (the record button starts via its own click). Stop/cancel still work from anywhere. */
 export function keepsSpace(key: string, state: SessionState, target: Target): boolean {
-  return key === ' ' && (state === 'idle' || state === 'error') && !!target.closest?.('[data-keeps-space]')
+  return key === ' ' && (state === 'idle' || state === 'error') && !!target.closest?.(ACTIVATABLE)
 }
 
 export function shortcutAction(key: string, state: SessionState, target: Target): 'start' | 'stop' | 'cancel' | null {

@@ -110,7 +110,7 @@ describe('recording actions', () => {
     fireEvent.click(within(rows()[0]).getByText('Sil', { selector: 'button.danger' }))
     await waitFor(() => expect(rows()).toHaveLength(1))
     expect(document.querySelector('[data-player]')).toBeNull()
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:p')
+    await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:p'))
   })
 
   it('action clicks do not toggle the row player', async () => {

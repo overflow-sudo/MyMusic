@@ -60,6 +60,7 @@ export default function RecordingActions({ onDownload, onDelete, extra }: Props)
     } catch {
       setFailed(true)
       setBusy(false)
+      requestAnimationFrame(() => cancelBtn.current?.focus())
     }
   }
   const onKey = (e: KeyboardEvent) => {

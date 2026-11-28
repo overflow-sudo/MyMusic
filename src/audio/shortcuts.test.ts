@@ -51,6 +51,22 @@ describe('shortcutAction', () => {
     expect(shortcutAction(' ', 'recording', btn)).toBe('stop')
     expect(shortcutAction('Escape', 'countingIn', btn)).toBe('cancel')
   })
+  it('leaves Space to buttons, links and role=button/switch/tab while idle or error; stop still works', () => {
+    const mk = (tag: string, attrs: Record<string, string> = {}) => {
+      const el = document.createElement(tag)
+      for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v)
+      return el
+    }
+    const inner = mk('span')
+    const wrapped = mk('div', { role: 'button' })
+    wrapped.appendChild(inner)
+    for (const el of [mk('button'), mk('a', { href: '#x' }), mk('summary'), mk('div', { role: 'switch' }), mk('div', { role: 'tab' }), inner]) {
+      expect(shortcutAction(' ', 'idle', el)).toBeNull()
+      expect(shortcutAction(' ', 'error', el)).toBeNull()
+      expect(shortcutAction(' ', 'recording', el)).toBe('stop')
+    }
+    expect(shortcutAction(' ', 'idle', mk('a'))).toBe('start') // anchor without href is not a control
+  })
   it('ignores other keys', () => {
     expect(shortcutAction('a', 'idle', body)).toBeNull()
   })

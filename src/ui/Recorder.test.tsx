@@ -262,6 +262,40 @@ describe('Recorder', () => {
     await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
   })
 
+  it('Space on a recording action button is left to the button; Space on the record button starts exactly one take', async () => {
+    const root = createMemoryDir()
+    const dir = await songDir(root, plain)
+    await dir.writeFile('2026-11-23_09-05-00_ses.webm', 'b')
+    render(
+      <SongDetail
+        song={plain}
+        root={root}
+        onBack={() => {}}
+        patchSong={async () => {}}
+        deleteSong={async () => {}}
+        recorder={<Recorder song={plain} root={root} latencyMs={null} onSaved={() => {}} />}
+      />,
+    )
+    await chooseAudio()
+    const list = await screen.findByRole('list')
+    for (const name of ['İndir', 'Sil']) {
+      expect(fireEvent.keyDown(within(list).getByRole('button', { name }), { key: ' ' })).toBe(true) // not prevented
+    }
+    fireEvent.click(within(list).getByRole('button', { name: 'Sil' }))
+    for (const name of ['Sil', 'Vazgeç']) {
+      expect(fireEvent.keyDown(within(list).getByRole('button', { name }), { key: ' ' })).toBe(true)
+    }
+    await act(async () => {})
+    expect(startTakeMock).not.toHaveBeenCalled()
+    const rec = document.querySelector<HTMLElement>('.rec-button')!
+    const notPrevented = fireEvent.keyDown(rec, { key: ' ' })
+    expect(notPrevented).toBe(true)
+    fireEvent.click(rec) // the browser's native click for Space
+    await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
+    await act(async () => {})
+    expect(startTakeMock).toHaveBeenCalledTimes(1)
+  })
+
   it('Space on a focused audio/video player does not start a take and is left to the player', async () => {
     renderRecorder(plain, undefined, undefined, (
       <>

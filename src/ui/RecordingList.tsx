@@ -130,11 +130,13 @@ export default function RecordingList({ root, song, onChanged, headingId }: Prop
 
   const remove = async (fileName: string) => {
     await deleteRecording(root, song, fileName)
-    const list = entries ?? []
-    const i = list.findIndex((e) => e.fileName === fileName)
-    const rest = list.filter((e) => e.fileName !== fileName)
-    focusAfter.current = { file: (rest[i] ?? rest[i - 1])?.fileName ?? null }
-    setEntries(rest)
+    setEntries((prev) => {
+      const list = prev ?? []
+      const i = list.findIndex((e) => e.fileName === fileName)
+      const rest = list.filter((e) => e.fileName !== fileName)
+      focusAfter.current = { file: (rest[i] ?? rest[i - 1])?.fileName ?? null }
+      return rest
+    })
     onChanged?.()
   }
 
