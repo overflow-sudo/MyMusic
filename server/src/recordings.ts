@@ -27,6 +27,9 @@ interface Row {
 export const recordingId = (songId: string, fileName: string): string =>
   createHash('sha256').update(`${songId}/${fileName}`).digest('hex').slice(0, 32)
 
+/** No lone surrogates (String#isWellFormed needs lib es2024). */
+const wellFormed = (s: string): boolean => (s as string & { isWellFormed(): boolean }).isWellFormed()
+
 function recId(v: unknown): string {
   if (typeof v !== 'string' || !REC_ID_RE.test(v)) throw new HttpError(400, 'Invalid recording id')
   return v
@@ -69,7 +72,7 @@ export class Recordings {
   async complete(body: Record<string, unknown>, parts: string[]): Promise<unknown> {
     const songId = validId(body.songId, 'song id')
     const { fileName, mime, kind, recordedAt } = body
-    if (typeof fileName !== 'string' || fileName === '' || fileName.length > 255 || !fileName.isWellFormed()) throw new HttpError(400, 'Invalid fileName')
+    if (typeof fileName !== 'string' || fileName === '' || fileName.length > 255 || !wellFormed(fileName)) throw new HttpError(400, 'Invalid fileName')
     if (kind !== 'video' && kind !== 'ses') throw new HttpError(400, 'Invalid kind')
     if (typeof recordedAt !== 'string' || !ISO_RE.test(recordedAt) || !Number.isFinite(Date.parse(recordedAt))) throw new HttpError(400, 'recordedAt must be an ISO date string')
     const id = recId(body.id)
