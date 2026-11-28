@@ -1,0 +1,19 @@
+{
+  "name": "mymusic-server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server/src/main.js",
+    "test": "vitest run"
+  },
+  "dependencies": { "better-sqlite3": "^12.0.0" },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.0.0",
+    "typescript": "~5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

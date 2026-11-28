@@ -5,5 +5,5 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   base: '/MyMusic/',
   plugins: [react()],
-  test: { environment: 'jsdom' },
+  test: { environment: 'jsdom', include: ['src/**/*.test.{ts,tsx}'] },
 })
