@@ -11,7 +11,7 @@ import CoverPanel from './CoverPanel'
 import Drawer from './Drawer'
 import { ColorChoices } from './LightColorPicker'
 import LightModeSegment from './LightModeSegment'
-import RecordingList from './RecordingList'
+import RecordingList, { type RecordingCloud } from './RecordingList'
 import SongForm, { type SongInput } from './SongForm'
 import TrackPanel from './TrackPanel'
 
@@ -33,6 +33,8 @@ interface Props {
   busy?: boolean
   /** Cover search/storage; without it the song screen shows no cover. */
   covers?: CoverActions
+  /** Cloud sync hooks: `hash` stores an imported track's hash with the import; `recordings` makes Sil delete in the cloud too. */
+  sync?: { hash?: (data: Blob) => Promise<string>; recordings?: RecordingCloud }
 }
 
 const STATUS: { value: SongStatus; label: string }[] = [
@@ -42,7 +44,7 @@ const STATUS: { value: SongStatus; label: string }[] = [
 // Status words are Turkish (ı → I, i → İ); artist names are often not ("Oasis" must not become "OASİS").
 const upperTr = (s: string) => s.toLocaleUpperCase('tr-TR')
 
-export default function SongDetail({ song, root, onBack, patchSong, deleteSong, recorder, drawerSlot, recordingsVersion = 0, onRecordingsChanged, busy = false, covers }: Props) {
+export default function SongDetail({ song, root, onBack, patchSong, deleteSong, recorder, drawerSlot, recordingsVersion = 0, onRecordingsChanged, busy = false, covers, sync }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [saveError, setSaveError] = useState(false)
@@ -86,7 +88,10 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
   const doImport = async (file: File) => {
     setSaveError(false)
     try {
-      const track = await importTrack(root, song, file)
+      const imported = await importTrack(root, song, file)
+      // Hash in the same edit: the other computer must never pair the new record with its old file.
+      const hash = sync?.hash ? await sync.hash(file).catch(() => undefined) : undefined
+      const track = hash ? { ...imported, hash } : imported
       await patchSong(song.id, { track })
       setTrackVersion((v) => v + 1)
     } catch {
@@ -178,7 +183,7 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
 
         <section className="song-recordings">
           <h2 id="recordings-heading" tabIndex={-1}>Kayıtlar</h2>
-          <RecordingList key={recordingsVersion} root={root} song={song} onChanged={onRecordingsChanged} headingId="recordings-heading" />
+          <RecordingList key={recordingsVersion} root={root} song={song} onChanged={onRecordingsChanged} headingId="recordings-heading" cloud={sync?.recordings} />
         </section>
       </div>
 

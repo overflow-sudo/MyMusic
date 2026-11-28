@@ -14,7 +14,16 @@ interface Props {
   onChanged?: () => void
   /** Element id that receives focus when the last recording is deleted. */
   headingId?: string
+  /** Set while a cloud session exists: Sil also deletes the recording on the server (after the local file). */
+  cloud?: RecordingCloud
 }
+
+export interface RecordingCloud {
+  /** Called after the local file is gone; resolves once the server delete is sent or queued. */
+  afterLocalDelete(song: Song, fileName: string): Promise<void>
+}
+
+const CLOUD_CONFIRM = 'Bu kayıt bu bilgisayardan ve buluttan silinsin mi?'
 
 const dateFormat = new Intl.DateTimeFormat('tr-TR', {
   day: 'numeric',
@@ -30,7 +39,7 @@ async function openFile(root: FsDir, song: Song, fileName: string): Promise<File
   return (await songDir(root, song)).readFile(fileName)
 }
 
-function Row({ root, song, entry, onDelete }: { root: FsDir; song: Song; entry: RecordingEntry; onDelete: () => Promise<void> }) {
+function Row({ root, song, entry, onDelete, confirmText }: { root: FsDir; song: Song; entry: RecordingEntry; onDelete: () => Promise<void>; confirmText?: string }) {
   const [playUrl, setPlayUrl] = useState<string | null>(null)
   const [duration, setDuration] = useState<number | null>(null)
   const [error, setError] = useState(false)
@@ -95,7 +104,7 @@ function Row({ root, song, entry, onDelete }: { root: FsDir; song: Song; entry: 
           <span>{entry.kind}</span>
           <span>{duration === null ? '' : formatTimecode(duration)}</span>
         </button>
-        <RecordingActions onDownload={download} onDelete={onDelete} />
+        <RecordingActions onDownload={download} onDelete={onDelete} confirmText={confirmText} />
       </div>
       {error && <p className="note" role="alert">Kayıt açılamadı.</p>}
       {playUrl && <Player src={playUrl} kind={entry.kind === 'video' ? 'video' : 'audio'} autoPlay />}
@@ -103,7 +112,7 @@ function Row({ root, song, entry, onDelete }: { root: FsDir; song: Song; entry: 
   )
 }
 
-export default function RecordingList({ root, song, onChanged, headingId }: Props) {
+export default function RecordingList({ root, song, onChanged, headingId, cloud }: Props) {
   const [entries, setEntries] = useState<RecordingEntry[] | null>(null)
   const focusAfter = useRef<{ file: string | null } | null>(null)
 
@@ -130,6 +139,8 @@ export default function RecordingList({ root, song, onChanged, headingId }: Prop
 
   const remove = async (fileName: string) => {
     await deleteRecording(root, song, fileName)
+    // The user asked: the local file is gone either way; the server delete is sent now or queued for the next sync.
+    if (cloud) await cloud.afterLocalDelete(song, fileName).catch(() => undefined)
     setEntries((prev) => {
       const list = prev ?? []
       const i = list.findIndex((e) => e.fileName === fileName)
@@ -145,7 +156,7 @@ export default function RecordingList({ root, song, onChanged, headingId }: Prop
   return (
     <ul className="recordings">
       {entries.map((e) => (
-        <Row key={e.fileName} root={root} song={song} entry={e} onDelete={() => remove(e.fileName)} />
+        <Row key={e.fileName} root={root} song={song} entry={e} onDelete={() => remove(e.fileName)} confirmText={cloud ? CLOUD_CONFIRM : undefined} />
       ))}
     </ul>
   )

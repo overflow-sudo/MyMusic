@@ -23,6 +23,14 @@ interface Options {
   backfill?: boolean
   search?: (title: string, artist: string) => Promise<CoverHit | null>
   download?: (url: string) => Promise<Blob | null>
+  /** File hash stored with a written cover (sync); none when absent. */
+  hash?: (data: Blob) => Promise<string>
+}
+
+/** `{ hash }` for the cover record, or nothing when hashing is off or fails (the sync backfills it). */
+async function hashField(hash: Options['hash'], data: Blob): Promise<{ hash?: string }> {
+  if (!hash) return {}
+  try { return { hash: await hash(data) } } catch { return {} }
 }
 
 const MAX_CONCURRENT = 2
@@ -41,16 +49,16 @@ export function useCovers(
   root: FsDir,
   songs: Song[],
   patchSong: (id: string, patch: Partial<Song>, opts?: { auto?: boolean }) => Promise<void>,
-  { backfill = false, search = searchCover, download = downloadImage }: Options = {},
+  { backfill = false, search = searchCover, download = downloadImage, hash }: Options = {},
 ): CoverActions {
   const songsRef = useRef(songs)
-  const deps = useRef({ root, patchSong, search, download })
+  const deps = useRef({ root, patchSong, search, download, hash })
   const backfillRef = useRef(backfill)
   // Declared first so it runs before the backfill effect below.
   useEffect(() => {
     songsRef.current = songs
     backfillRef.current = backfill
-    deps.current = { root, patchSong, search, download }
+    deps.current = { root, patchSong, search, download, hash }
   })
 
   // Session-level bookkeeping (lives as long as the open folder).
@@ -101,7 +109,7 @@ export function useCovers(
           const { root, patchSong } = deps.current
           // Checked again right before writing (inside the serial lock), so a user's own file is never replaced.
           const written = blob ? await writeCover(root, song, blob, 'jpg', { cleanup: false }) : null
-          const cover: Cover = written ? { source: 'itunes', fileName: written } : { source: 'itunes', url: hit.artworkUrl }
+          const cover: Cover = written ? { source: 'itunes', fileName: written, ...(await hashField(deps.current.hash, blob!)) } : { source: 'itunes', url: hit.artworkUrl }
           // Only a deleted song can turn stale while writing (cover edits wait for the lock); its folder keeps the file.
           if (stale()) return 'found'
           bump(song.id)
@@ -135,8 +143,9 @@ export function useCovers(
         const { root, patchSong } = deps.current
         bump(song.id)
         const fileName = await writeCover(root, song, file, extOf(file), { cleanup: false })
+        const h = await hashField(deps.current.hash, file)
         try {
-          await patchSong(song.id, { cover: { source: 'user', fileName } })
+          await patchSong(song.id, { cover: { source: 'user', fileName, ...h } })
         } catch (e) {
           await discardNewCover(root, song, fileName, latest(song.id)?.cover ?? song.cover)
           throw e

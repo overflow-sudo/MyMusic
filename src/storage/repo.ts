@@ -82,3 +82,21 @@ export async function readTrack(root: FsDir, song: Song): Promise<File | null> {
   const found = (await dir.list()).find((e) => e.kind === 'file' && isTrackFile(e.name))
   return found ? dir.readFile(found.name) : null
 }
+
+/** Reads one file of the song folder by exact name (null when the folder or file is missing). */
+export async function readSongFile(root: FsDir, song: Song, fileName: string): Promise<File | null> {
+  const dir = await existingSongDir(root, song)
+  return dir ? dir.readFile(fileName) : null
+}
+
+/** Valid names for a synced track: `track.<ext>` (lower-case alnum, max 5). */
+export const isSyncTrackName = (name: string) => /^track\.[a-z0-9]{1,5}$/.test(name)
+
+/** Writes a downloaded track under `fileName` (same naming rule as importTrack) and removes other track.* files. */
+export async function writeTrackFile(root: FsDir, song: Song, fileName: string, data: Blob): Promise<void> {
+  if (!isSyncTrackName(fileName)) throw new Error('Invalid track file name')
+  const dir = await songDir(root, song)
+  await dir.writeFile(fileName, data)
+  for (const e of await dir.list())
+    if (e.kind === 'file' && isTrackFile(e.name) && e.name.toLowerCase() !== fileName) await dir.remove(e.name)
+}

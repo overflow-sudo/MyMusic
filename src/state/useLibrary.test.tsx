@@ -194,4 +194,22 @@ describe('useLibrary', () => {
     const r = await loadLibrary(root)
     expect(r.ok && r.library.songs[0].cover).toBeUndefined()
   })
+  it('pendingDeletes: add is saved (a local change), clear is saved without bumping revision', async () => {
+    const { root, result } = await ready()
+    const rev = result.current.revision
+    await act(() => result.current.addPendingDelete('abc'))
+    await act(() => result.current.addPendingDelete('abc'))
+    await act(() => result.current.addPendingDelete('def'))
+    expect(result.current.getPendingDeletes()).toEqual(['abc', 'def'])
+    expect(result.current.revision).toBe(rev + 2)
+    let r = await loadLibrary(root)
+    expect(r.ok && r.library.pendingDeletes).toEqual(['abc', 'def'])
+    await act(() => result.current.clearPendingDeletes(['abc']))
+    expect(result.current.revision).toBe(rev + 2)
+    r = await loadLibrary(root)
+    expect(r.ok && r.library.pendingDeletes).toEqual(['def'])
+    // A merge keeps the list.
+    await act(() => result.current.applyMerged(result.current.getAllSongs()))
+    expect(result.current.getPendingDeletes()).toEqual(['def'])
+  })
 })

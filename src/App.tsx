@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { deleteRecordingInCloud } from './cloud/deleteRecording'
+import { sha256Hex } from './cloud/hash'
+import { useHasSession } from './cloud/session'
 import { useCloudSync } from './cloud/useCloudSync'
 import { useCovers } from './cover/useCovers'
 import { listRecordings } from './storage/repo'
@@ -10,6 +13,7 @@ import BrokenLibrary from './ui/BrokenLibrary'
 import FolderGate from './ui/FolderGate'
 import LightLayer from './ui/LightLayer'
 import Recorder from './ui/Recorder'
+import type { RecordingCloud } from './ui/RecordingList'
 import SettingsDialog from './ui/SettingsDialog'
 import SongDetail from './ui/SongDetail'
 import SongList from './ui/SongList'
@@ -38,14 +42,27 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
   const selected = selectedSongId ? songs.find((s) => s.id === selectedSongId) : undefined
   useSongLight(selected ? selected.bpm : null, selected)
   // Backfill runs while the list is on screen; covers for new songs are searched right after adding.
-  const covers = useCovers(root, songs, lib.patchSong, { backfill: lib.status === 'ready' && !selected })
+  const covers = useCovers(root, songs, lib.patchSong, { backfill: lib.status === 'ready' && !selected, hash: sha256Hex })
+  const { patchSong, getPendingDeletes, addPendingDelete, clearPendingDeletes } = lib
+  const files = useMemo(
+    () => ({ root, patchSong, getPendingDeletes, clearPendingDeletes, onRecordingsDeleted: () => setCountsVersion((v) => v + 1) }),
+    [root, patchSong, getPendingDeletes, clearPendingDeletes],
+  )
   const cloud = useCloudSync({
     ready: lib.status === 'ready',
     busy: recorderBusy,
     revision: lib.revision,
     getLocalSongs: lib.getAllSongs,
     applyMerged: lib.applyMerged,
+    files,
   })
+  const hasSession = useHasSession()
+  const sync = useMemo(() => {
+    const recordings: RecordingCloud | undefined = hasSession
+      ? { afterLocalDelete: async (song, fileName) => void (await deleteRecordingInCloud(song.id, fileName, { addPendingDelete, clearPendingDeletes })) }
+      : undefined
+    return { hash: sha256Hex, recordings }
+  }, [hasSession, addPendingDelete, clearPendingDeletes])
   useEffect(() => {
     if (lib.status !== 'ready') return
     let cancelled = false
@@ -107,6 +124,7 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
           patchSong={lib.patchSong}
           deleteSong={lib.deleteSong}
           covers={covers}
+          sync={sync}
           recordingsVersion={countsVersion}
           onRecordingsChanged={() => setDeletedTick((v) => v + 1)}
           busy={recorderBusy}

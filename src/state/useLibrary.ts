@@ -100,6 +100,27 @@ export function useLibrary(root: FsDir) {
   )
   /** Every song including tombstones, as of now (for the sync loop). */
   const getAllSongs = useCallback(() => current.current.songs, [])
+  /** Recording ids still to be deleted on the server. */
+  const getPendingDeletes = useCallback(() => current.current.pendingDeletes ?? [], [])
+  /** A local Sil that could not reach the server: saved so the next sync sends it. */
+  const addPendingDelete = useCallback(
+    (id: string) => {
+      const list = current.current.pendingDeletes ?? []
+      if (list.includes(id)) return Promise.resolve()
+      return commit({ ...current.current, pendingDeletes: [...list, id] })
+    },
+    [commit],
+  )
+  /** Sync loop: these deletes reached the server. */
+  const clearPendingDeletes = useCallback(
+    (ids: string[]) => {
+      const list = current.current.pendingDeletes ?? []
+      const rest = list.filter((x) => !ids.includes(x))
+      if (rest.length === list.length) return Promise.resolve()
+      return commit({ ...current.current, pendingDeletes: rest }, { fromSync: true })
+    },
+    [commit],
+  )
   const setSettings = useCallback(
     (p: Partial<Library['settings']>) =>
       commit({ ...current.current, settings: { ...current.current.settings, ...p } }),
@@ -119,5 +140,5 @@ export function useLibrary(root: FsDir) {
     return songs.length === library.songs.length ? library : { ...library, songs }
   }, [library])
 
-  return { status, library: visible, error, revision, addSong, patchSong, deleteSong, setSettings, resetBroken, applyMerged, getAllSongs }
+  return { status, library: visible, error, revision, addSong, patchSong, deleteSong, setSettings, resetBroken, applyMerged, getAllSongs, getPendingDeletes, addPendingDelete, clearPendingDeletes }
 }

@@ -22,7 +22,7 @@ function deferred<T>() {
 const hit: CoverHit = { artworkUrl: 'https://x/600x600bb.jpg' }
 const jpeg = () => new Blob(['img'], { type: 'image/jpeg' })
 
-function setup(initial: Song[], opts: { search?: (t: string, a: string) => Promise<CoverHit | null>; download?: (u: string) => Promise<Blob | null>; backfill?: boolean; failPatch?: boolean } = {}) {
+function setup(initial: Song[], opts: { search?: (t: string, a: string) => Promise<CoverHit | null>; download?: (u: string) => Promise<Blob | null>; backfill?: boolean; failPatch?: boolean; hash?: (b: Blob) => Promise<string> } = {}) {
   const root = createMemoryDir()
   const search = vi.fn(opts.search ?? (async () => hit))
   const download = vi.fn(opts.download ?? (async () => jpeg()))
@@ -37,7 +37,7 @@ function setup(initial: Song[], opts: { search?: (t: string, a: string) => Promi
         autos.push(o?.auto === true)
         setSongs((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)))
       }, [])
-      const covers = useCovers(root, songs, patchSong, { backfill, search, download })
+      const covers = useCovers(root, songs, patchSong, { backfill, search, download, hash: opts.hash })
       return { songs, setSongs, covers }
     },
     { initialProps: { backfill: opts.backfill ?? false } },
@@ -294,5 +294,16 @@ describe('useCovers', () => {
     await act(async () => void (await view.result.current.covers.setUserCover(s1, new File(['x'], 'a.png', { type: 'image/png' }))))
     await act(async () => void (await view.result.current.covers.removeCover(s1)))
     expect(autos).toEqual([true, true, true, false, false, false])
+  })
+  it('with a hash function, written covers carry the file hash in the same patch', async () => {
+    const s = mk(1)
+    const hash = vi.fn(async (b: Blob) => `h-${await b.text()}`)
+    const { view, patches } = setup([s], { hash })
+    await act(async () => { await view.result.current.covers.findCover(s) })
+    await act(async () => { await view.result.current.covers.setUserCover(s, new File(['mine'], 'a.png', { type: 'image/png' })) })
+    expect(patches).toEqual([
+      { id: 's1', patch: { cover: { source: 'itunes', fileName: 'cover.jpg', hash: 'h-img' } } },
+      { id: 's1', patch: { cover: { source: 'user', fileName: 'cover.png', hash: 'h-mine' } } },
+    ])
   })
 })

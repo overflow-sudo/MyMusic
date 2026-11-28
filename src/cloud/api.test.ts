@@ -183,6 +183,19 @@ describe('upload primitives', () => {
 })
 
 describe('body reads', () => {
+  it('headFile sends HEAD and returns the hash header, "" without it, null on 404', async () => {
+    const f = vi.fn(async (_u: string, init?: RequestInit) => {
+      expect(init?.method).toBe('HEAD')
+      return new Response(null, { status: 200, headers: { 'X-Content-SHA256': 'abc' } })
+    })
+    const api = createApi(session, f as unknown as typeof fetch)
+    expect(await api.headFile('s1', 'track')).toBe('abc')
+    expect(f.mock.calls[0][0]).toBe('https://s.example/api/songs/s1/track')
+    expect(await createApi(session, async () => new Response(null, { status: 200 })).headFile('s1', 'cover')).toBe('')
+    expect(await createApi(session, async () => new Response(null, { status: 404 })).headFile('s1', 'cover')).toBeNull()
+    await expect(createApi(session, async () => new Response(null, { status: 500 })).headFile('s1', 'cover')).rejects.toMatchObject({ kind: 'server' })
+  })
+
   it('getFile times out while the body stalls', async () => {
     vi.useFakeTimers()
     const f = vi.fn((_u: string, init: RequestInit) => {

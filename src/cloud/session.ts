@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react'
 export const DEFAULT_BASE_URL = 'https://music.emiraksu.me'
 const KEY = 'mm.cloud'
 
@@ -46,4 +47,9 @@ export function clearSession(): void {
 export function onSessionChange(fn: () => void): () => void {
   listeners.add(fn)
   return () => { listeners.delete(fn) }
+}
+
+/** True while a cloud session (token) is saved; re-renders on login/logout. */
+export function useHasSession(): boolean {
+  return useSyncExternalStore(onSessionChange, () => getSession() !== null)
 }

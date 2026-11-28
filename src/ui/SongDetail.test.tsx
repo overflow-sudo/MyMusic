@@ -21,7 +21,7 @@ const openDrawer = () => fireEvent.click(screen.getByRole('button', { name: 'Şa
 
 const base = createSong({ title: 'Wonderwall', artist: 'Oasis', status: 'learning', bpm: 87, countInBeats: 4 }, new Date(), 's1')
 
-function setup(opts: { song?: Song; fail?: boolean } = {}) {
+function setup(opts: { song?: Song; fail?: boolean; hash?: (b: Blob) => Promise<string> } = {}) {
   const root = createMemoryDir()
   const patches: Partial<Song>[] = []
   const deleted: string[] = []
@@ -46,6 +46,7 @@ function setup(opts: { song?: Song; fail?: boolean } = {}) {
           setSong((s) => ({ ...s, ...p }))
         }}
         deleteSong={deleteSong}
+        sync={opts.hash ? { hash: opts.hash } : undefined}
       />
     )
   }
@@ -135,6 +136,17 @@ describe('SongDetail', () => {
     const lib = { ...emptyLibrary(), songs: [{ ...base, track: { fileName: 'track.mp3', startSec: 12, volume: 0.5 } }] }
     expect(serializeLibrary(updateSong(lib, 's1', patches.at(-1)!, new Date()))).not.toContain('"track"')
     expect(await screen.findByLabelText('Parça seç')).toBeInTheDocument()
+  })
+
+  it('with a hash function the import patch carries the file hash; later edits keep it', async () => {
+    const { patches } = setup({ hash: async (b) => `h-${await b.text()}` })
+    openDrawer()
+    fireEvent.change(screen.getByLabelText('Parça seç'), { target: { files: [new File(['abc'], 'x.mp3', { type: 'audio/mpeg' })] } })
+    await waitFor(() => expect(patches).toContainEqual({ track: { fileName: 'track.mp3', startSec: 0, volume: 0.7, hash: 'h-abc' } }))
+    const start = screen.getByLabelText('Başlangıç noktası')
+    fireEvent.change(start, { target: { value: '0:05' } })
+    fireEvent.blur(start)
+    await waitFor(() => expect(patches.at(-1)).toEqual({ track: { fileName: 'track.mp3', startSec: 5, volume: 0.7, hash: 'h-abc' } }))
   })
 
   it('start point error does not leak into a re-imported track', async () => {

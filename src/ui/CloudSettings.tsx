@@ -89,7 +89,10 @@ export default function CloudSettings({ onSyncNow = () => {}, fetchImpl }: Props
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void connect() } }}
         />
       </label>
-      <p className="muted" role="status">{STATE_TEXT[status.state]}</p>
+      <p className="muted" role="status">
+        {STATE_TEXT[status.state]}
+        {status.state === 'syncing' && status.progress ? ` · ${status.progress}` : ''}
+      </p>
       {error && <p className="note" role="alert">{error}</p>}
       <div className="row">
         <button type="button" className="btn" disabled={busy} onClick={() => void connect()}>Bağlan</button>

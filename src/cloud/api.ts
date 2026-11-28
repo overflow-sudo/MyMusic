@@ -127,6 +127,15 @@ export function createApi(session: ApiSession, fetchImpl: typeof fetch = (...a) 
       return request('GET', `/api/songs/${enc(songId)}/${kind}`, { timeoutMs: FILE_TIMEOUT_MS, signal: o.signal }, async (res) =>
         ({ blob: await res.blob(), hash: res.headers.get('X-Content-SHA256') }))
     },
+    /** Cheap presence check (HEAD): the server's X-Content-SHA256, '' when it has the file without a hash, null when it has none. */
+    async headFile(songId: string, kind: 'track' | 'cover'): Promise<string | null> {
+      try {
+        return await request('HEAD', `/api/songs/${enc(songId)}/${kind}`, {}, async (res) => res.headers.get('X-Content-SHA256') ?? '')
+      } catch (e) {
+        if (e instanceof CloudError && e.kind === 'gone') return null
+        throw e
+      }
+    },
     deleteFile: (songId: string, kind: 'track' | 'cover') => getJson<unknown>('DELETE', `/api/songs/${enc(songId)}/${kind}`),
     // Chunked upload primitives (see chunkedUpload.ts)
     createUpload: (o: { signal?: AbortSignal } = {}) => getJson<{ uploadId: string }>('POST', '/api/uploads', o),

@@ -7,6 +7,8 @@ interface Props {
   onDelete(): Promise<void>
   /** More buttons (Paylaş, later) go between İndir and Sil. */
   extra?: ReactNode
+  /** Confirm question (cloud connected: also deletes there). */
+  confirmText?: string
 }
 
 /** Saves `file` through a temporary anchor; the object URL is revoked right after the click. */
@@ -31,7 +33,7 @@ const TrashIcon = () => (
   <svg {...svg}><path d="M4 7h16" /><path d="M9 7V4h6v3" /><path d="M6 7l1 13h10l1-13" /><path d="M10 11v6M14 11v6" /></svg>
 )
 
-export default function RecordingActions({ onDownload, onDelete, extra }: Props) {
+export default function RecordingActions({ onDownload, onDelete, extra, confirmText = 'Bu kayıt silinsin mi?' }: Props) {
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -72,7 +74,7 @@ export default function RecordingActions({ onDownload, onDelete, extra }: Props)
   if (confirming)
     return (
       <div className="recording-actions recording-confirm" role="group" aria-label="Silme onayı" onClick={stop} onKeyDown={onKey}>
-        <span>Bu kayıt silinsin mi?</span>
+        <span>{confirmText}</span>
         <button type="button" className="danger" disabled={busy} onClick={() => void confirm()}>Sil</button>
         <button type="button" ref={cancelBtn} disabled={busy} onClick={cancel}>Vazgeç</button>
         {failed && <span className="recording-error" role="alert">Silinemedi, tekrar dene.</span>}

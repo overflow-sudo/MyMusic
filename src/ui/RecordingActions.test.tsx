@@ -141,4 +141,28 @@ describe('recording actions', () => {
     expect(rows()).toHaveLength(2)
     expect(onChanged).not.toHaveBeenCalled()
   })
+  it('with a cloud session: cloud confirm text; Sil deletes the local file, then the cloud delete', async () => {
+    const mem = createMemoryDir()
+    const dir = await songDir(mem, song)
+    await dir.writeFile(A, 'aaa')
+    const order: string[] = []
+    const cloud = { afterLocalDelete: vi.fn(async (_s: typeof song, name: string) => { order.push(`cloud:${name}:${(await dir.readFile(name)) ? 'still' : 'gone'}`) }) }
+    render(<RecordingList root={mem} song={song} cloud={cloud} />)
+    await screen.findAllByRole('listitem')
+    fireEvent.click(screen.getByRole('button', { name: 'Sil' }))
+    expect(screen.getByText('Bu kayıt bu bilgisayardan ve buluttan silinsin mi?')).toBeInTheDocument()
+    fireEvent.click(within(screen.getByRole('group', { name: 'Silme onayı' })).getByRole('button', { name: 'Sil' }))
+    await waitFor(() => expect(screen.getByText('Henüz kayıt yok.')).toBeInTheDocument())
+    expect(order).toEqual([`cloud:${A}:gone`])
+  })
+
+  it('a failing cloud step still removes the row (the local file is gone)', async () => {
+    const mem = createMemoryDir()
+    await (await songDir(mem, song)).writeFile(A, 'aaa')
+    render(<RecordingList root={mem} song={song} cloud={{ afterLocalDelete: async () => { throw new Error('x') } }} />)
+    await screen.findAllByRole('listitem')
+    fireEvent.click(screen.getByRole('button', { name: 'Sil' }))
+    fireEvent.click(within(screen.getByRole('group', { name: 'Silme onayı' })).getByRole('button', { name: 'Sil' }))
+    await waitFor(() => expect(screen.getByText('Henüz kayıt yok.')).toBeInTheDocument())
+  })
 })

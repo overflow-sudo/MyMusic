@@ -2,12 +2,29 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Song } from '../domain/types'
 import { CloudError, createApi } from './api'
 import { getSession, onSessionChange, sessionGeneration, type Session } from './session'
-import { getCloudStatus, markSynced, setCloudStatus } from './status'
+import type { FsDir } from '../storage/fsDir'
+import { getCloudStatus, markSynced, setCloudProgress, setCloudStatus } from './status'
+import { syncFilesOnce, type FilesSyncApi } from './syncFiles'
 import { syncLibraryOnce, type LibrarySyncApi } from './syncLibrary'
+import { syncRecordingsOnce, type RecordingsSyncApi } from './syncRecordings'
 
 export const SYNC_DEBOUNCE_MS = 2_000
 export const SYNC_INTERVAL_MS = 60_000
 const FAILED_TEXT = 'Eşitleme tamamlanamadı'
+
+/** What a pass needs from the server; the file/recording methods are used only with `files`. */
+export type SyncApi = LibrarySyncApi & Partial<FilesSyncApi & RecordingsSyncApi>
+type FullApi = LibrarySyncApi & FilesSyncApi & RecordingsSyncApi
+
+export interface FileSyncOptions {
+  root: FsDir
+  /** Hash backfill (always { auto: true }). */
+  patchSong(id: string, patch: Partial<Song>, opts: { auto: true }): Promise<void>
+  getPendingDeletes(): string[]
+  clearPendingDeletes(ids: string[]): Promise<void> | void
+  /** A pass removed local recording files (server tombstones): lists/counts should reload. */
+  onRecordingsDeleted?(): void
+}
 
 interface Options {
   /** The local library is loaded and usable. */
@@ -18,14 +35,16 @@ interface Options {
   revision: number
   getLocalSongs(): Song[]
   applyMerged(songs: Song[]): Promise<void> | void
+  /** Tracks/covers and recordings after the library step; without it a pass syncs the library only. */
+  files?: FileSyncOptions
   /** Injectable for tests. */
-  makeApi?: (s: Session) => LibrarySyncApi
+  makeApi?: (s: Session) => SyncApi
 }
 
-const defaultMakeApi = (s: Session): LibrarySyncApi => createApi(s)
+const defaultMakeApi = (s: Session): SyncApi => createApi(s)
 
 /** Background library sync: on mount/session, 2 s after local changes, every 60 s, on `online`, and on syncNow(). Never throws. */
-export function useCloudSync({ ready, busy, revision, getLocalSongs, applyMerged, makeApi = defaultMakeApi }: Options): { syncNow(): void } {
+export function useCloudSync({ ready, busy, revision, getLocalSongs, applyMerged, files, makeApi = defaultMakeApi }: Options): { syncNow(): void } {
   const [session, setSessionState] = useState(getSession)
   // Session generation that got a 401: automatic passes wait for a new session (or syncNow).
   const authBlocked = useRef<number | null>(null)
@@ -40,10 +59,18 @@ export function useCloudSync({ ready, busy, revision, getLocalSongs, applyMerged
     [],
   )
 
-  const deps = useRef({ session, ready, busy, getLocalSongs, applyMerged, makeApi })
+  const deps = useRef({ session, ready, busy, getLocalSongs, applyMerged, files, makeApi })
   useEffect(() => {
-    deps.current = { session, ready, busy, getLocalSongs, applyMerged, makeApi }
+    deps.current = { session, ready, busy, getLocalSongs, applyMerged, files, makeApi }
   })
+  // Aborts the running file transfer when a take starts.
+  const transfer = useRef<AbortController | null>(null)
+  useEffect(() => {
+    if (busy) transfer.current?.abort()
+  }, [busy])
+  // Files known to be on the server (per session) and file hashes (per folder): keep passes cheap.
+  const confirmed = useRef({ gen: -1, set: new Set<string>() })
+  const hashCache = useRef(new Map<string, string>())
   const running = useRef(false)
   const again = useRef(false) // a pass was asked for while one ran or while busy
   const alive = useRef(true)
@@ -69,12 +96,49 @@ export function useCloudSync({ ready, busy, revision, getLocalSongs, applyMerged
     const mine = () => sessionGeneration() === gen
     setCloudStatus('syncing')
     try {
-      const stats = await syncLibraryOnce({ api: d.makeApi(d.session), getLocalSongs: () => deps.current.getLocalSongs(), applyMerged: (s) => deps.current.applyMerged(s) })
-      // Task 11: tracks/covers → recording deletes → recording uploads continue here.
-      // Re-check deps.current.busy before every upload step (a take may have started during the library step).
+      const api = d.makeApi(d.session)
+      const getLocalSongs = () => deps.current.getLocalSongs()
+      const stats = await syncLibraryOnce({ api, getLocalSongs, applyMerged: (s) => deps.current.applyMerged(s) })
+      let failed = stats.failed > 0
+      const f = deps.current.files
+      if (f && mine()) {
+        const full = api as FullApi
+        const ac = new AbortController()
+        transfer.current = ac
+        // Re-checked before every transfer: a take may start at any point of the pass.
+        const shouldStop = () => deps.current.busy || !alive.current || !mine()
+        if (confirmed.current.gen !== gen) confirmed.current = { gen, set: new Set() }
+        try {
+          const fs = await syncFilesOnce({
+            api: full, root: f.root, getLocalSongs, shouldStop, signal: ac.signal,
+            patchSong: (id, patch, o) => (deps.current.files ?? f).patchSong(id, patch, o),
+            confirmed: confirmed.current.set, hashCache: hashCache.current,
+            onProgress: (i, n) => mine() && setCloudProgress(`Dosyalar: ${i}/${n}`),
+          })
+          failed ||= fs.failed > 0
+          let stopped = fs.stopped
+          if (!stopped && mine()) {
+            const rs = await syncRecordingsOnce({
+              api: full, root: f.root, getLocalSongs, shouldStop, signal: ac.signal,
+              getPendingDeletes: () => (deps.current.files ?? f).getPendingDeletes(),
+              clearPendingDeletes: (ids) => (deps.current.files ?? f).clearPendingDeletes(ids),
+              allowUploads: !fs.rateLimited,
+              onProgress: (i, n) => mine() && setCloudProgress(`Yükleniyor: ${i}/${n}`),
+            })
+            failed ||= rs.failed > 0
+            stopped = rs.stopped
+            if (rs.localDeleted > 0 && mine()) (deps.current.files ?? f).onRecordingsDeleted?.()
+          }
+          // Stopped for a take: finish after it ends.
+          if (stopped) again.current = true
+        } finally {
+          if (transfer.current === ac) transfer.current = null
+          setCloudProgress(null)
+        }
+      }
       if (mine()) {
         authBlocked.current = null
-        setCloudStatus('connected', stats.failed > 0 ? FAILED_TEXT : null)
+        setCloudStatus('connected', failed ? FAILED_TEXT : null)
         markSynced()
       }
     } catch (e) {

@@ -1,5 +1,7 @@
 import { CloudError, type CloudApi } from './api'
 
+type UploadApi = Pick<CloudApi, 'createUpload' | 'putPart' | 'completeUpload' | 'abortUpload'>
+
 export const PART_BYTES = 32 * 1024 * 1024
 
 export interface UploadOpts { onProgress?: (sentBytes: number, totalBytes: number) => void; signal?: AbortSignal }
@@ -13,7 +15,7 @@ export interface UploadOpts { onProgress?: (sentBytes: number, totalBytes: numbe
  * getRecordings before re-uploading.
  */
 export async function uploadBlob(
-  api: CloudApi,
+  api: UploadApi,
   blob: Blob,
   completeBody: Record<string, unknown>,
   opts: UploadOpts = {},
@@ -42,7 +44,7 @@ export async function uploadBlob(
 export const ABORT_RETRY_MS = 2000
 
 /** A timed-out part is usually still in flight server-side (409): retry the abort once after a short wait. */
-async function abortBestEffort(api: CloudApi, uploadId: string): Promise<void> {
+async function abortBestEffort(api: UploadApi, uploadId: string): Promise<void> {
   try { await api.abortUpload(uploadId); return } catch (e) {
     if (!(e instanceof CloudError && e.kind === 'conflict')) return
   }

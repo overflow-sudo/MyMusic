@@ -1,9 +1,15 @@
 import { useSyncExternalStore } from 'react'
 
 export type CloudState = 'off' | 'connecting' | 'connected' | 'syncing' | 'offline' | 'needs-login'
-export interface CloudStatus { state: CloudState; lastError: string | null; lastSyncAt: string | null }
+export interface CloudStatus {
+  state: CloudState
+  lastError: string | null
+  lastSyncAt: string | null
+  /** Short progress text while a pass transfers files (e.g. "Yükleniyor: 2/5"). */
+  progress: string | null
+}
 
-const initial: CloudStatus = { state: 'off', lastError: null, lastSyncAt: null }
+const initial: CloudStatus = { state: 'off', lastError: null, lastSyncAt: null, progress: null }
 let current = initial
 const listeners = new Set<() => void>()
 
@@ -17,6 +23,11 @@ export const getCloudStatus = (): CloudStatus => current
 export function setCloudStatus(state: CloudState, lastError: string | null = null): void {
   if (state === current.state && lastError === current.lastError) return
   set({ ...current, state, lastError })
+}
+
+export function setCloudProgress(progress: string | null): void {
+  if (progress === current.progress) return
+  set({ ...current, progress })
 }
 
 export function markSynced(at: string = new Date().toISOString()): void {
