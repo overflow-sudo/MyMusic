@@ -20,6 +20,10 @@ export function sessionCookie(token: string): string {
   return `${COOKIE_NAME}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/`
 }
 
+export function clearSessionCookie(): string {
+  return `${COOKIE_NAME}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`
+}
+
 export class Auth {
   constructor(private db: Db, private config: Config, private now: () => number = Date.now) {}
 
@@ -44,15 +48,32 @@ export class Auth {
     return !!this.db.prepare('SELECT 1 FROM tokens WHERE hash = ?').get(hashToken(token))
   }
 
-  /** Bearer for everything; the mm_session cookie only on GET/HEAD routes explicitly marked `cookie: true` (phone page). */
+  /** CSRF guard for cookie-authenticated requests: Origin must be exactly the PUBLIC_URL origin. */
+  originOk(req: IncomingMessage): boolean {
+    try { return req.headers.origin === new URL(this.config.publicUrl).origin } catch { return false }
+  }
+
+  cookieToken(req: IncomingMessage): string | undefined {
+    return req.headers.cookie?.split(';').map((c) => c.trim())
+      .find((c) => c.startsWith(COOKIE_NAME + '='))?.slice(COOKIE_NAME.length + 1)
+  }
+
+  revoke(token: string): void {
+    this.db.prepare('DELETE FROM tokens WHERE hash = ?').run(hashToken(token))
+  }
+
+  /** Bearer for everything; the mm_session cookie only on routes marked `cookie: true` (phone page), and for state-changing methods only with a matching Origin. */
   authenticate = (req: IncomingMessage, allowCookie = false): void => {
     const header = req.headers.authorization
     const bearer = header?.match(/^Bearer\s+(\S+)$/i)?.[1]
     if (bearer && this.tokenValid(bearer)) return
-    if (!bearer && allowCookie && (req.method === 'GET' || req.method === 'HEAD')) {
-      const cookie = req.headers.cookie?.split(';').map((c) => c.trim())
-        .find((c) => c.startsWith(COOKIE_NAME + '='))?.slice(COOKIE_NAME.length + 1)
-      if (cookie && this.tokenValid(cookie)) return
+    if (!bearer && allowCookie) {
+      const cookie = this.cookieToken(req)
+      if (cookie && this.tokenValid(cookie)) {
+        if (req.method === 'GET' || req.method === 'HEAD' || this.originOk(req)) return
+        // No Origin at all: the cookie simply does not count (401). A foreign Origin is an explicit CSRF attempt (403).
+        if (req.headers.origin) throw new HttpError(403, 'Bad origin')
+      }
     }
     throw new HttpError(401, 'Unauthorized', { 'WWW-Authenticate': 'Bearer' })
   }

@@ -23,7 +23,7 @@ export interface RouteOptions {
   auth?: boolean
   /** Parse body as JSON (max 1 MiB). Default true; set false for streaming routes. */
   json?: boolean
-  /** Also accept the mm_session cookie (GET/HEAD only). Default false: /api is Bearer-only. */
+  /** Also accept the mm_session cookie (state-changing methods need Origin === PUBLIC_URL origin). Default false: /api is Bearer-only. */
   cookie?: boolean
 }
 
@@ -84,7 +84,7 @@ export class Router {
 
   private match(method: string, pathname: string): { route: Route; params: Record<string, string> } | 'method' | null {
     // Strict split: '//api/x' must not collapse onto '/api/x'.
-    const segs = pathname.split('/').slice(1)
+    const segs = pathname === '/' ? [] : pathname.split('/').slice(1)
     let pathMatched = false
     for (const route of this.routes) {
       if (route.parts.length !== segs.length) continue
@@ -128,7 +128,7 @@ export class Router {
       if (!target.startsWith('/')) throw new HttpError(400, 'Bad request target')
       let url: URL
       try { url = new URL('http://local' + target) } catch { throw new HttpError(400, 'Bad request target') }
-      logPath = url.pathname
+      logPath = url.pathname.replace(/^\/r\/[^/]*/, '/r/***') // share tokens never reach the log
       for (const [k, v] of Object.entries(cors ?? {})) res.setHeader(k, v)
       if (method === 'OPTIONS') {
         if (!cors || !req.headers.origin) throw new HttpError(403, 'Origin not allowed')

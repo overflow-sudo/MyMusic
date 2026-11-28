@@ -145,6 +145,11 @@ export class Recordings {
     if (!verify(this.config.signingSecret, id, ctx.url.searchParams.get('exp'), ctx.url.searchParams.get('sig'), download, Math.floor(this.now() / 1000))) {
       throw new HttpError(403, 'Invalid or expired link')
     }
+    await this.serveRow(ctx, id, download)
+  }
+
+  /** Streams the ready output (else the original) of an existing recording. Callers must have authorised `id` already. */
+  async serveRow(ctx: Ctx, id: string, download: boolean): Promise<void> {
     const row = this.row(id)
     if (!row) throw new HttpError(404, 'Unknown recording')
     const ready = row.status === 'ready' && row.out_path

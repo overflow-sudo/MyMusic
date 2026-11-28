@@ -8,6 +8,8 @@ import { Library } from './library.ts'
 import { Uploads } from './uploads.ts'
 import { registerLibraryRoutes } from './routes.ts'
 import { Recordings, registerRecordingRoutes } from './recordings.ts'
+import { Shares, registerShareRoutes } from './share.ts'
+import { registerPageRoutes } from './pages.ts'
 import { realRunner, Transcoder, type MediaRunner } from './transcode.ts'
 import { consoleLogger, type Logger } from './log.ts'
 
@@ -38,6 +40,9 @@ export function createApp(config: Config, logger: Logger = consoleLogger, opts: 
   const transcoder = new Transcoder(db, files.filesRoot, opts.media ?? realRunner, logger, opts.transcodeTimeoutMs)
   const recordings = new Recordings(db, files, library, transcoder, config)
   registerRecordingRoutes(router, recordings, uploads)
+  const shares = new Shares(db, config, files, recordings)
+  registerShareRoutes(router, shares)
+  registerPageRoutes(router, { auth, recordings, library, files, shares })
   recordings.sweep()
   transcoder.start()
 
