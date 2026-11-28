@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, renderHook, waitFor } from '@testing-library/react'
 import { act } from 'react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { FsDir } from '../storage/fsDir'
 import { createMemoryDir } from '../storage/memoryDir'
 import { loadLibrary } from '../storage/repo'
@@ -67,7 +67,7 @@ describe('useLibrary', () => {
     expect(r.ok && r.library.settings.latencyCompensationMs).toBe(42)
     await act(() => result.current.deleteSong(song.id))
     const r2 = await loadLibrary(root)
-    expect(r2.ok && r2.library.songs).toEqual([])
+    expect(r2.ok && r2.library.songs.filter((s) => !s.deletedAt)).toEqual([])
   })
 
   function flaky(root: FsDir) {
@@ -119,5 +119,67 @@ describe('useLibrary', () => {
     await act(() => result.current.setSettings({ latencyCompensationMs: 10 }))
     const r = await loadLibrary(mem)
     expect(r.ok && r.library.songs[0].bpm).toBe(87)
+  })
+
+  async function ready(root = createMemoryDir()) {
+    const view = renderHook(() => useLibrary(root))
+    await waitFor(() => expect(view.result.current.status).toBe('ready'))
+    let song!: Awaited<ReturnType<typeof view.result.current.addSong>>
+    await act(async () => {
+      song = await view.result.current.addSong(input)
+    })
+    return { root, result: view.result, song }
+  }
+
+  it('an auto patch keeps updatedAt; a user patch bumps it', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(new Date('2026-11-28T10:00:00.000Z'))
+      const { root, result, song } = await ready()
+      vi.setSystemTime(new Date('2026-11-28T11:00:00.000Z'))
+      await act(() => result.current.patchSong(song.id, { cover: { source: 'itunes', fileName: 'cover.jpg' } }, { auto: true }))
+      expect(result.current.library.songs[0].updatedAt).toBe('2026-11-28T10:00:00.000Z')
+      expect(result.current.library.songs[0].cover).toEqual({ source: 'itunes', fileName: 'cover.jpg' })
+      const r = await loadLibrary(root)
+      expect(r.ok && r.library.songs[0].updatedAt).toBe('2026-11-28T10:00:00.000Z')
+      await act(() => result.current.patchSong(song.id, { bpm: 99 }))
+      expect(result.current.library.songs[0].updatedAt).toBe('2026-11-28T11:00:00.000Z')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('deleteSong writes a tombstone that consumers never see', async () => {
+    const { root, result, song } = await ready()
+    await act(() => result.current.deleteSong(song.id))
+    expect(result.current.library.songs).toEqual([])
+    const all = result.current.getAllSongs()
+    expect(all).toHaveLength(1)
+    expect(all[0].deletedAt).toBe(all[0].updatedAt)
+    const r = await loadLibrary(root)
+    expect(r.ok && r.library.songs[0].deletedAt).toBeTruthy()
+  })
+
+  it('a tombstone on disk is hidden after load', async () => {
+    const root = createMemoryDir()
+    const { result, song } = await ready(root)
+    await act(() => result.current.deleteSong(song.id))
+    cleanup()
+    const again = renderHook(() => useLibrary(root))
+    await waitFor(() => expect(again.result.current.status).toBe('ready'))
+    expect(again.result.current.library.songs).toEqual([])
+  })
+
+  it('local edits bump revision; applyMerged saves without bumping it', async () => {
+    const { root, result, song } = await ready()
+    const rev = result.current.revision
+    await act(() => result.current.patchSong(song.id, { bpm: 91 }))
+    expect(result.current.revision).toBe(rev + 1)
+    const remote = { ...song, id: 'remote-1', title: 'From server' }
+    await act(() => result.current.applyMerged([...result.current.getAllSongs(), remote]))
+    expect(result.current.revision).toBe(rev + 1)
+    expect(result.current.library.songs.map((s) => s.title)).toEqual(['Wonderwall', 'From server'])
+    const r = await loadLibrary(root)
+    expect(r.ok && r.library.songs).toHaveLength(2)
   })
 })

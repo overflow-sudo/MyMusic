@@ -13,6 +13,23 @@ const validCover = (c: unknown): boolean =>
   (c.source === 'none' ||
     ((c.source === 'itunes' || c.source === 'user') && (typeof c.fileName === 'string' || typeof c.url === 'string')))
 
+/** Validates one song record (from disk or the server); null when unusable. Unknown fields are kept. */
+export function parseSong(s: unknown): Song | null {
+  if (!isObject(s)) return null
+  const song: Record<string, unknown> = { ...s, countInBeats: s.countInBeats === undefined ? 4 : s.countInBeats }
+  if (song.cover !== undefined && !validCover(song.cover)) delete song.cover
+  if (song.chords !== undefined && typeof song.chords !== 'string') delete song.chords
+  if (song.lightColor !== undefined && !(typeof song.lightColor === 'string' && /^#[0-9a-f]{6}$/i.test(song.lightColor))) delete song.lightColor
+  if (song.deletedAt !== undefined && typeof song.deletedAt !== 'string') delete song.deletedAt
+  const ok =
+    typeof song.id === 'string' && typeof song.title === 'string' && typeof song.folderName === 'string' &&
+    typeof song.bpm === 'number' && typeof song.countInBeats === 'number'
+  return ok ? (song as unknown as Song) : null
+}
+
+/** Songs the UI may show: everything except tombstones. */
+export const visibleSongs = (songs: Song[]): Song[] => songs.filter((s) => !s.deletedAt)
+
 export function parseLibrary(
   text: string | null,
 ): { ok: true; library: Library } | { ok: false; error: string } {
@@ -26,23 +43,18 @@ export function parseLibrary(
   if (!isObject(raw)) return { ok: false, error: 'mymusic.json beklenen biçimde değil.' }
   if (raw.songs !== undefined && !Array.isArray(raw.songs))
     return { ok: false, error: 'mymusic.json: şarkı listesi geçersiz.' }
-  const songs = ((raw.songs ?? []) as unknown[]).map((s) => {
-    if (!isObject(s)) return null
-    const song: Record<string, unknown> = { ...s, countInBeats: s.countInBeats === undefined ? 4 : s.countInBeats }
-    if (song.cover !== undefined && !validCover(song.cover)) delete song.cover
-    if (song.chords !== undefined && typeof song.chords !== 'string') delete song.chords
-    if (song.lightColor !== undefined && !(typeof song.lightColor === 'string' && /^#[0-9a-f]{6}$/i.test(song.lightColor))) delete song.lightColor
-    const ok =
-      typeof song.id === 'string' && typeof song.title === 'string' && typeof song.folderName === 'string' &&
-      typeof song.bpm === 'number' && typeof song.countInBeats === 'number'
-    return ok ? (song as unknown as Song) : null
-  })
+  const songs = ((raw.songs ?? []) as unknown[]).map(parseSong)
   if (songs.some((s) => s === null)) return { ok: false, error: 'mymusic.json: şarkı kaydı geçersiz.' }
   const settings = isObject(raw.settings) ? raw.settings : {}
+  const rest: Record<string, unknown> = { ...raw }
+  if (rest.pendingDeletes !== undefined) {
+    if (Array.isArray(rest.pendingDeletes)) rest.pendingDeletes = rest.pendingDeletes.filter((x) => typeof x === 'string')
+    else delete rest.pendingDeletes
+  }
   return {
     ok: true,
     library: {
-      ...raw,
+      ...rest,
       version: 1,
       settings: {
         ...settings,
@@ -74,6 +86,12 @@ export function updateSong(lib: Library, id: string, patch: Partial<Song>, now: 
       s.id === id ? { ...s, ...patch, id: s.id, folderName: s.folderName, updatedAt: now.toISOString() } : s,
     ),
   }
+}
+
+/** Deletes by turning the song into a tombstone (kept so the delete reaches other computers). */
+export function tombstoneSong(lib: Library, id: string, now: Date): Library {
+  const iso = now.toISOString()
+  return { ...lib, songs: lib.songs.map((s) => (s.id === id ? { ...s, deletedAt: iso, updatedAt: iso } : s)) }
 }
 
 export function removeSong(lib: Library, id: string): Library {

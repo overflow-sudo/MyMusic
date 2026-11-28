@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCloudSync } from './cloud/useCloudSync'
 import { useCovers } from './cover/useCovers'
 import { listRecordings } from './storage/repo'
 import { useLibrary } from './state/useLibrary'
@@ -33,11 +34,18 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
   const [deletedTick, setDeletedTick] = useState(0) // recount without remounting the open list (keeps focus)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [recorderBusy, setRecorderBusy] = useState(false)
-  const songs = lib.library.songs
+  const songs = lib.library.songs // never includes tombstones
   const selected = selectedSongId ? songs.find((s) => s.id === selectedSongId) : undefined
   useSongLight(selected ? selected.bpm : null, selected)
   // Backfill runs while the list is on screen; covers for new songs are searched right after adding.
   const covers = useCovers(root, songs, lib.patchSong, { backfill: lib.status === 'ready' && !selected })
+  const cloud = useCloudSync({
+    ready: lib.status === 'ready',
+    busy: recorderBusy,
+    revision: lib.revision,
+    getLocalSongs: lib.getAllSongs,
+    applyMerged: lib.applyMerged,
+  })
   useEffect(() => {
     if (lib.status !== 'ready') return
     let cancelled = false
@@ -67,6 +75,7 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
           value={latencyMs}
           onSave={(v) => lib.setSettings({ latencyCompensationMs: v })}
           onClose={() => setSettingsOpen(false)}
+          onSyncNow={cloud.syncNow}
         />
       )}
       <div hidden={!!selected} inert={settingsOpen}>
@@ -76,7 +85,7 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
           onAdd={async (input) => {
             const song = await lib.addSong(input)
             // `once`: the backfill may already have picked the new song up.
-            void covers.findCover(song, { once: true }).catch(() => undefined)
+            void covers.findCover(song, { once: true, auto: true }).catch(() => undefined)
           }}
           recordingCounts={recordingCounts}
           root={root}

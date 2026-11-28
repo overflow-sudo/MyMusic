@@ -10,8 +10,9 @@ export interface CoverActions {
   /**
    * Searches iTunes and saves the hit. Rejects only when saving fails; a stale result is dropped ('found').
    * With `once`, a song (id + title + artist) already searched this session is not searched again.
+   * `auto`: started by the app, not the user — the patch keeps updatedAt (spec decision 7).
    */
-  findCover(song: Song, opts?: { once?: boolean }): Promise<FindResult>
+  findCover(song: Song, opts?: { once?: boolean; auto?: boolean }): Promise<FindResult>
   /** Resolves 'unsupported' (and writes nothing) for a file that isn't a usable raster image. */
   setUserCover(song: Song, file: File): Promise<'saved' | 'unsupported'>
   removeCover(song: Song): Promise<void>
@@ -39,7 +40,7 @@ const extOf = (file: File) => {
 export function useCovers(
   root: FsDir,
   songs: Song[],
-  patchSong: (id: string, patch: Partial<Song>) => Promise<void>,
+  patchSong: (id: string, patch: Partial<Song>, opts?: { auto?: boolean }) => Promise<void>,
   { backfill = false, search = searchCover, download = downloadImage }: Options = {},
 ): CoverActions {
   const songsRef = useRef(songs)
@@ -74,7 +75,7 @@ export function useCovers(
   const latest = (id: string) => songsRef.current.find((s) => s.id === id)
 
   const findCover = useCallback(
-    (song: Song, opts?: { once?: boolean }): Promise<FindResult> => {
+    (song: Song, opts?: { once?: boolean; auto?: boolean }): Promise<FindResult> => {
       const key = keyOf(song)
       const existing = pending.current.get(key)
       if (existing) return existing
@@ -105,7 +106,7 @@ export function useCovers(
           if (stale()) return 'found'
           bump(song.id)
           try {
-            await patchSong(song.id, { cover })
+            await (opts?.auto ? patchSong(song.id, { cover }, { auto: true }) : patchSong(song.id, { cover }))
           } catch (e) {
             // Keep showing the old cover: drop the new file instead of the old one.
             if (written) await discardNewCover(root, song, written, startCover)
@@ -166,7 +167,7 @@ export function useCovers(
       const song = latest(queue.current.shift()!)
       if (!song || song.cover || attempted.current.has(keyOf(song))) continue
       running.current++
-      findCover(song, { once: true })
+      findCover(song, { once: true, auto: true })
         .catch(() => 'none')
         .finally(() => {
           running.current--

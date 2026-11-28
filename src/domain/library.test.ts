@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createSong, emptyLibrary, parseLibrary, removeSong, serializeLibrary, updateSong } from './library'
+import { createSong, emptyLibrary, parseLibrary, parseSong, removeSong, serializeLibrary, tombstoneSong, updateSong, visibleSongs } from './library'
 
 const now = new Date('2026-11-24T10:00:00.000Z')
 const input = { title: 'Wonderwall', artist: 'Oasis', status: 'learning' as const, bpm: 87, countInBeats: 4 }
@@ -127,5 +127,40 @@ describe('lightColor', () => {
   it('keeps a valid hex', () => expect(parse('#3B82f6').lightColor).toBe('#3B82f6'))
   it('drops bad values', () => {
     for (const bad of ['red', '#fff', 42, null]) expect('lightColor' in parse(bad)).toBe(false)
+  })
+})
+
+describe('sync fields', () => {
+  const song = () => createSong(input, now, 's1')
+  const parseLib = (extra: Record<string, unknown>, songExtra: Record<string, unknown> = {}) => {
+    const r = parseLibrary(JSON.stringify({ version: 1, songs: [{ ...song(), ...songExtra }], ...extra }))
+    if (!r.ok) throw new Error(r.error)
+    return r.library
+  }
+  it('keeps an ISO deletedAt, drops a non-string one', () => {
+    expect(parseLib({}, { deletedAt: '2026-11-28T10:00:00.000Z' }).songs[0].deletedAt).toBe('2026-11-28T10:00:00.000Z')
+    expect('deletedAt' in parseLib({}, { deletedAt: 5 }).songs[0]).toBe(false)
+  })
+  it('keeps pendingDeletes (strings only)', () => {
+    expect(parseLib({ pendingDeletes: ['a', 'b'] }).pendingDeletes).toEqual(['a', 'b'])
+    expect(parseLib({ pendingDeletes: ['a', 3] }).pendingDeletes).toEqual(['a'])
+    expect('pendingDeletes' in parseLib({ pendingDeletes: 'x' })).toBe(false)
+    expect('pendingDeletes' in parseLib({})).toBe(false)
+  })
+  it('parseSong validates a single record', () => {
+    expect(parseSong(song())?.id).toBe('s1')
+    expect(parseSong({ id: 'x' })).toBeNull()
+    expect(parseSong('nope')).toBeNull()
+  })
+  it('tombstoneSong marks the song deleted and bumps updatedAt', () => {
+    const later = new Date('2026-12-01T00:00:00.000Z')
+    const out = tombstoneSong({ ...emptyLibrary(), songs: [song()] }, 's1', later)
+    expect(out.songs).toHaveLength(1)
+    expect(out.songs[0]).toMatchObject({ id: 's1', title: 'Wonderwall', deletedAt: later.toISOString(), updatedAt: later.toISOString() })
+  })
+  it('visibleSongs hides tombstones', () => {
+    const a = song()
+    const b = { ...createSong(input, now, 's2'), deletedAt: now.toISOString() }
+    expect(visibleSongs([a, b])).toEqual([a])
   })
 })

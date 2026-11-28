@@ -27,12 +27,14 @@ function setup(initial: Song[], opts: { search?: (t: string, a: string) => Promi
   const search = vi.fn(opts.search ?? (async () => hit))
   const download = vi.fn(opts.download ?? (async () => jpeg()))
   const patches: { id: string; patch: Partial<Song> }[] = []
+  const autos: boolean[] = []
   const view = renderHook(
     ({ backfill }) => {
       const [songs, setSongs] = useState(initial)
-      const patchSong = useCallback(async (id: string, patch: Partial<Song>) => {
+      const patchSong = useCallback(async (id: string, patch: Partial<Song>, o?: { auto?: boolean }) => {
         if (opts.failPatch) throw new Error('disk')
         patches.push({ id, patch })
+        autos.push(o?.auto === true)
         setSongs((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)))
       }, [])
       const covers = useCovers(root, songs, patchSong, { backfill, search, download })
@@ -40,7 +42,7 @@ function setup(initial: Song[], opts: { search?: (t: string, a: string) => Promi
     },
     { initialProps: { backfill: opts.backfill ?? false } },
   )
-  return { root, search, download, patches, view }
+  return { root, search, download, patches, autos, view }
 }
 
 describe('useCovers', () => {
@@ -276,5 +278,21 @@ describe('useCovers', () => {
     expect(r).toBe('unsupported')
     expect(patches).toEqual([])
     expect((await (await songDir(root, s)).list()).map((e) => e.name)).toEqual([])
+  })
+
+  it('backfill and auto finds patch with { auto: true }; user actions are normal edits', async () => {
+    const s1 = mk(1)
+    const s2 = mk(2)
+    const { view, autos, patches } = setup([s1, s2], { backfill: true })
+    await waitFor(() => expect(patches).toHaveLength(2))
+    expect(autos).toEqual([true, true])
+    const s3 = mk(3)
+    await act(async () => { view.result.current.setSongs((ss) => [...ss, s3]) })
+    view.rerender({ backfill: false })
+    await act(async () => void (await view.result.current.covers.findCover(s3, { once: true, auto: true })))
+    await act(async () => void (await view.result.current.covers.findCover({ ...s1, title: 'Renamed' })))
+    await act(async () => void (await view.result.current.covers.setUserCover(s1, new File(['x'], 'a.png', { type: 'image/png' }))))
+    await act(async () => void (await view.result.current.covers.removeCover(s1)))
+    expect(autos).toEqual([true, true, true, false, false, false])
   })
 })
