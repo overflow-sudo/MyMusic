@@ -8,7 +8,7 @@ import { validId } from './ids.ts'
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/
 const REC_ID_RE = /^[0-9a-f]{32}$/
-export const SHARE_CSP = "default-src 'self'; img-src 'self'; media-src 'self'; style-src 'self' 'unsafe-inline'"
+export const SHARE_CSP = "default-src 'self'; img-src 'self'; media-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 
 interface ShareRow { id: string; song_id: string; kind: 'video' | 'ses'; song_title: string; song_artist: string }
 

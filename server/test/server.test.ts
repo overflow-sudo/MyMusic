@@ -84,7 +84,7 @@ describe('http + auth', () => {
     h.app.router.add('GET', '/api/cookie-probe', () => ({ ok: true }), { cookie: true })
     const headers = { Cookie: `mm_session=${token}` }
     expect((await fetch(h.base + '/api/cookie-probe', { headers })).status).toBe(200)
-    expect((await fetch(h.base + '/api/ping', { method: 'POST', headers })).status).toBe(401)
+    expect((await fetch(h.base + '/api/ping', { method: 'POST', headers })).status).toBe(403)
   })
 
   it('CORS allows listed origins and rejects others', async () => {

@@ -71,8 +71,7 @@ export class Auth {
       const cookie = this.cookieToken(req)
       if (cookie && this.tokenValid(cookie)) {
         if (req.method === 'GET' || req.method === 'HEAD' || this.originOk(req)) return
-        // No Origin at all: the cookie simply does not count (401). A foreign Origin is an explicit CSRF attempt (403).
-        if (req.headers.origin) throw new HttpError(403, 'Bad origin')
+        throw new HttpError(403, 'Origin header must match the site origin')
       }
     }
     throw new HttpError(401, 'Unauthorized', { 'WWW-Authenticate': 'Bearer' })

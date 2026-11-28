@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { Auth } from './auth.ts'
 import { clearSessionCookie, sessionCookie } from './auth.ts'
 import type { Files } from './files.ts'
@@ -7,22 +9,30 @@ import type { Library } from './library.ts'
 import type { Recordings } from './recordings.ts'
 import type { Shares } from './share.ts'
 
-const PAGE_CSP = "default-src 'self'; media-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'"
+const PAGE_CSP = "default-src 'self'; media-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 const STATIC: [string, string, string][] = [
   ['/', 'index.html', 'text/html; charset=utf-8'],
   ['/app.js', 'app.js', 'text/javascript; charset=utf-8'],
   ['/app.css', 'app.css', 'text/css; charset=utf-8'],
 ]
 
+/** public/ next to the package.json above this module: same from src/ and from dist/server/src/. */
+export function publicDir(from: string = dirname(fileURLToPath(import.meta.url))): string {
+  for (let d = from; ; d = dirname(d)) {
+    if (existsSync(join(d, 'package.json'))) return join(d, 'public')
+    if (dirname(d) === d) throw new Error('package.json not found above ' + from)
+  }
+}
+
 export interface PhoneSong { id: string; title: string; artist: string; hasCover: boolean }
 
 export function registerPageRoutes(router: Router, deps: { auth: Auth; recordings: Recordings; library: Library; files: Files; shares: Shares }): void {
   const { auth, recordings, library, files, shares } = deps
-  const publicDir = new URL('../public/', import.meta.url)
+  const dir = publicDir()
 
   for (const [path, file, type] of STATIC) {
     router.add('GET', path, (ctx) => {
-      const body = readFileSync(new URL(file, publicDir))
+      const body = readFileSync(join(dir, file))
       ctx.res.writeHead(200, {
         'Content-Type': type, 'Content-Length': body.length, 'X-Content-Type-Options': 'nosniff',
         'Content-Security-Policy': PAGE_CSP, 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-cache',
