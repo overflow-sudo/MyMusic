@@ -6,7 +6,7 @@ const OWN_KEYS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'AUDIO', 'VIDEO'])
 
 /** Elements that use Space themselves (typing, play/pause): shortcuts must leave them alone. */
 export function isTypingTarget(target: Target): boolean {
-  return OWN_KEYS.has(target.tagName.toUpperCase()) || !!target.isContentEditable || !!target.closest?.('[data-player]')
+  return OWN_KEYS.has(target.tagName.toUpperCase()) || !!target.isContentEditable || !!target.closest?.('[data-player], [data-keeps-space]')
 }
 
 export function shortcutAction(key: string, state: SessionState, target: Target): 'start' | 'stop' | 'cancel' | null {

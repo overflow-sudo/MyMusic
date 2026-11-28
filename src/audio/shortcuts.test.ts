@@ -43,6 +43,11 @@ describe('shortcutAction', () => {
     expect(shortcutAction(' ', 'idle', btn)).toBeNull()
     expect(isTypingTarget(document.createElement('button'))).toBe(false)
   })
+  it('ignores anything marked data-keeps-space', () => {
+    const btn = document.createElement('button')
+    btn.setAttribute('data-keeps-space', '')
+    expect(shortcutAction(' ', 'idle', btn)).toBeNull()
+  })
   it('ignores other keys', () => {
     expect(shortcutAction('a', 'idle', body)).toBeNull()
   })

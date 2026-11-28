@@ -14,6 +14,8 @@ import { readTrack } from '../storage/repo'
 import CountdownOverlay from './CountdownOverlay'
 import DeviceSelectors from './DeviceSelectors'
 import LevelMeter from './LevelMeter'
+import PreviewToggle from './PreviewToggle'
+import { usePreviewHidden } from './usePreviewHidden'
 
 interface Props {
   song: Song
@@ -28,6 +30,7 @@ interface Props {
   onBusyChange?(busy: boolean): void
 }
 
+const HIDDEN_NOTE = 'Kamera kayıtta · önizleme gizli'
 const TRACK_MISSING = 'Parça dosyası bulunamadı, parçasız kaydediliyor.'
 const TRACK_PAST_END = 'Başlangıç noktası parçanın sonundan sonra, parçasız kaydediliyor.'
 const TRACK_UNDECODABLE = 'Parça dosyası okunamadı, parçasız kaydediliyor.'
@@ -45,6 +48,7 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
   const [error, setError] = useState<string | null>(null)
   const [notices, setNotices] = useState<string[]>([])
   const [preparing, setPreparing] = useState(false)
+  const [previewHidden, setPreviewHidden] = usePreviewHidden()
 
   const mounted = useRef(true)
   const streamRef = useRef<MediaStream | null>(null)
@@ -253,6 +257,8 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
     />
   )
 
+  const hideVideo = mode === 'video' && previewHidden
+
   let recordLabel = 'Kaydet'
   if (session === 'finalizing') recordLabel = 'Kaydediliyor…'
   else if (busy) recordLabel = 'Durdur'
@@ -260,9 +266,10 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
 
   return (
     <section className="recorder">
-      <div className={`stage rec-stage rec-stage-${mode}`}>
-        {mode === 'video' && stream && <Preview stream={stream} />}
-        {session !== 'countingIn' && <span className="stage-label">{inputLabel(mode, stream)}</span>}
+      <div className={`stage rec-stage rec-stage-${mode}${hideVideo ? ' rec-stage-hidden' : ''}`}>
+        {mode === 'video' && stream && <Preview stream={stream} hidden={hideVideo} />}
+        {mode === 'video' && <PreviewToggle hidden={previewHidden} onChange={setPreviewHidden} />}
+        {session !== 'countingIn' && <span className="stage-label">{hideVideo ? HIDDEN_NOTE : inputLabel(mode, stream)}</span>}
         {session === 'recording' && <span className="stage-rec elapsed">● {formatTimecode(elapsed)}</span>}
         {session === 'countingIn' && <CountdownOverlay beatsLeft={beats} onCancel={() => take.current?.cancel()} />}
       </div>
@@ -310,10 +317,11 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
   )
 }
 
-function Preview({ stream }: { stream: MediaStream }) {
+/** Hidden = still mounted and playing (the stream and the take are untouched), just not visible. */
+function Preview({ stream, hidden }: { stream: MediaStream; hidden: boolean }) {
   const ref = useRef<HTMLVideoElement>(null)
   useEffect(() => {
     if (ref.current) ref.current.srcObject = stream
   }, [stream])
-  return <video ref={ref} className="preview" autoPlay muted playsInline />
+  return <video ref={ref} className={hidden ? 'preview preview-off' : 'preview'} autoPlay muted playsInline />
 }
