@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SongRecord } from '../../shared/api'
 import type { Song } from '../domain/types'
 import { CloudError } from './api'
+import { createSong } from '../domain/library'
 import { clearSession, setSession } from './session'
 import { getCloudStatus, resetCloudStatus } from './status'
 import type { LibrarySyncApi } from './syncLibrary'
@@ -15,14 +16,14 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
-function setup(opts: { getLibrary?: () => Promise<{ songs: SongRecord[] }>; session?: boolean } = {}) {
+function setup(opts: { getLibrary?: () => Promise<{ songs: SongRecord[] }>; putSong?: (s: SongRecord) => Promise<SongRecord>; local?: Song[]; session?: boolean } = {}) {
   if (opts.session !== false) setSession({ baseUrl: 'https://example.test', token: 'dummy-token' })
   const api: LibrarySyncApi = {
     getLibrary: vi.fn(opts.getLibrary ?? (async () => ({ songs: [] }))),
-    putSong: vi.fn(async (s: SongRecord) => s),
+    putSong: vi.fn(opts.putSong ?? (async (s: SongRecord) => s)),
   }
   const makeApi = vi.fn(() => api)
-  let local: Song[] = []
+  let local: Song[] = opts.local ?? []
   const applyMerged = vi.fn(async (s: Song[]) => { local = s })
   const view = renderHook(
     ({ busy, revision }: { busy: boolean; revision: number }) =>
@@ -144,5 +145,25 @@ describe('useCloudSync', () => {
     act(() => setSession({ baseUrl: 'https://other.test', token: 'dummy-2' }))
     await h.flush()
     expect(h.makeApi).toHaveBeenLastCalledWith({ baseUrl: 'https://other.test', token: 'dummy-2' })
+  })
+
+  it('a refused put leaves status connected with lastError', async () => {
+    const local = [createSong({ title: 'A', artist: 'B', status: 'learning', bpm: 90, countInBeats: 4 }, new Date('2026-11-28T10:00:00.000Z'), 'a')]
+    const h = setup({ local, putSong: async () => { throw new CloudError('client', 'bad', { status: 400 }) } })
+    await h.flush()
+    expect(getCloudStatus()).toMatchObject({ state: 'connected', lastError: 'Eşitleme tamamlanamadı' })
+  })
+
+  it('after a 401, a new session alone resets needs-login and runs the automatic pass', async () => {
+    let n = 0
+    const h = setup({ getLibrary: async () => { if (n++ === 0) throw new CloudError('auth', 'Unauthorized', { status: 401 }); return { songs: [] } } })
+    await h.flush()
+    expect(getCloudStatus().state).toBe('needs-login')
+    act(() => setSession({ baseUrl: 'https://example.test', token: 'dummy-new' }))
+    await h.flush()
+    expect(h.calls()).toBe(2)
+    expect(getCloudStatus().state).toBe('connected')
+    await h.advance(60_000)
+    expect(h.calls()).toBe(3)
   })
 })

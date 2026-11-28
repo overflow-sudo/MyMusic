@@ -182,4 +182,16 @@ describe('useLibrary', () => {
     const r = await loadLibrary(root)
     expect(r.ok && r.library.songs).toHaveLength(2)
   })
+
+  it('an auto patch on a tombstoned song does nothing', async () => {
+    const { root, result, song } = await ready()
+    await act(() => result.current.deleteSong(song.id))
+    const before = result.current.getAllSongs()
+    const rev = result.current.revision
+    await act(() => result.current.patchSong(song.id, { cover: { source: 'itunes', fileName: 'cover.jpg' } }, { auto: true }))
+    expect(result.current.getAllSongs()).toBe(before)
+    expect(result.current.revision).toBe(rev)
+    const r = await loadLibrary(root)
+    expect(r.ok && r.library.songs[0].cover).toBeUndefined()
+  })
 })

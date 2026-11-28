@@ -81,6 +81,9 @@ export function useLibrary(root: FsDir) {
     (id: string, patch: Partial<Song>, opts?: { auto?: boolean }) => {
       const lib = current.current
       if (!opts?.auto) return commit(updateSong(lib, id, patch, new Date()))
+      // A background fill never touches a deleted (or unknown) song: it may have been tombstoned by a sync meanwhile.
+      const target = lib.songs.find((s) => s.id === id)
+      if (!target || target.deletedAt) return Promise.resolve()
       return commit({
         ...lib,
         songs: lib.songs.map((s) => (s.id === id ? { ...s, ...patch, id: s.id, folderName: s.folderName, updatedAt: s.updatedAt } : s)),

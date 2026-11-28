@@ -46,11 +46,21 @@ describe('library', () => {
 
   it('equal updatedAt keeps stored but fills missing cover and track.hash', async () => {
     const { api } = await boot()
-    await api('PUT', '/api/songs/song-0001', song({ title: 'Stored', track: { name: 'a.mp3' } }))
-    const r = await api('PUT', '/api/songs/song-0001', song({ title: 'Other', cover: { source: 'user', fileName: 'c.jpg' }, track: { name: 'b.mp3', hash: 'abc' } }))
-    expect(await r.json()).toEqual(song({ title: 'Stored', cover: { source: 'user', fileName: 'c.jpg' }, track: { name: 'a.mp3', hash: 'abc' } }))
-    const again = await api('PUT', '/api/songs/song-0001', song({ cover: { source: 'itunes', fileName: 'z.jpg', hash: 'zz' }, track: { hash: 'other' } }))
-    expect(await again.json()).toEqual(song({ title: 'Stored', cover: { source: 'user', fileName: 'c.jpg' }, track: { name: 'a.mp3', hash: 'abc' } }))
+    await api('PUT', '/api/songs/song-0001', song({ title: 'Stored', track: { fileName: 'a.mp3' } }))
+    const r = await api('PUT', '/api/songs/song-0001', song({ title: 'Other', cover: { source: 'user', fileName: 'c.jpg' }, track: { fileName: 'a.mp3', hash: 'abc' } }))
+    expect(await r.json()).toEqual(song({ title: 'Stored', cover: { source: 'user', fileName: 'c.jpg' }, track: { fileName: 'a.mp3', hash: 'abc' } }))
+    const again = await api('PUT', '/api/songs/song-0001', song({ cover: { source: 'itunes', fileName: 'z.jpg', hash: 'zz' }, track: { fileName: 'a.mp3', hash: 'other' } }))
+    expect(await again.json()).toEqual(song({ title: 'Stored', cover: { source: 'user', fileName: 'c.jpg' }, track: { fileName: 'a.mp3', hash: 'abc' } }))
+  })
+
+  it('equal updatedAt: track.hash only for the same stored track file, never a whole track', async () => {
+    const { api } = await boot()
+    await api('PUT', '/api/songs/song-0001', song({ title: 'Stored', track: { fileName: 'a.mp3' } }))
+    const other = await api('PUT', '/api/songs/song-0001', song({ track: { fileName: 'b.mp3', hash: 'abc' } }))
+    expect(await other.json()).toEqual(song({ title: 'Stored', track: { fileName: 'a.mp3' } }))
+    await api('PUT', '/api/songs/song-0002', song({ id: 'song-0002', title: 'NoTrack' }))
+    const adopt = await api('PUT', '/api/songs/song-0002', song({ id: 'song-0002', track: { fileName: 'a.mp3', hash: 'abc' } }))
+    expect(await adopt.json()).toEqual(song({ id: 'song-0002', title: 'NoTrack' }))
   })
 
   it('validates id, updatedAt and shape', async () => {

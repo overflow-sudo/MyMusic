@@ -23,6 +23,8 @@ function fill(local: Song, remote: Song): Song {
 
 /** True when the server copy (equal updatedAt) lacks a cover / hash that `merged` has, so pushing lets the server fill it. */
 function serverCanFill(merged: Song, remote: Song): boolean {
+  // The server never fills a stored tombstone (server/src/library.ts), so pushing would repeat every pass.
+  if (remote.deletedAt) return false
   const mc = merged.cover
   const rc = remote.cover
   if (mc && !rc) return true

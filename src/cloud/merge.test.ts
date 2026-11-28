@@ -122,4 +122,10 @@ describe('mergeLibraries', () => {
     expect(merged[0].deletedAt).toBe(T2)
     expect(toPush).toEqual(['a'])
   })
+
+  it('equal updatedAt with a server tombstone: never pushed for a fill (server would not fill it)', () => {
+    const local = song('a', T1, { deletedAt: T1, cover: { source: 'itunes', fileName: 'cover.jpg' }, track: { fileName: 't.mp3', startSec: 0, volume: 1, hash: 'h' } })
+    const remote = song('a', T1, { deletedAt: T1, track: { fileName: 't.mp3', startSec: 0, volume: 1 } })
+    expect(mergeLibraries([local], [remote]).toPush).toEqual([])
+  })
 })

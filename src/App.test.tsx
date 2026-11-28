@@ -99,4 +99,32 @@ describe('App', () => {
       resetCloudStatus()
     }
   })
+
+  it('an open song deleted by a sync closes, and does not reopen when a newer copy returns', async () => {
+    const base = createSong({ title: 'Shared', artist: 'Both', status: 'learning', bpm: 90, countInBeats: 4 }, new Date('2026-11-28T10:00:00.000Z'), 'sh-1')
+    await saveLibrary(memory, { ...emptyLibrary(), songs: [base] })
+    localStorage.setItem('mm.cloud', JSON.stringify({ baseUrl: 'https://example.test', token: 'dummy-token' }))
+    let remote: unknown[] = [base]
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/api/library')) return new Response(JSON.stringify({ songs: remote }), { status: 200 })
+      if (init?.method === 'PUT') return new Response(String(init.body), { status: 200 })
+      return new Response('{}', { status: 404 })
+    }))
+    try {
+      render(<App />)
+      fireEvent.click(await screen.findByText('Shared'))
+      await screen.findByRole('button', { name: 'Geri' })
+      remote = [{ ...base, deletedAt: '2026-11-28T11:00:00.000Z', updatedAt: '2026-11-28T11:00:00.000Z' }]
+      window.dispatchEvent(new Event('online'))
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Geri' })).toBeNull())
+      expect(screen.queryByText('Shared')).toBeNull()
+      remote = [{ ...base, title: 'Shared again', updatedAt: '2026-11-28T12:00:00.000Z' }]
+      window.dispatchEvent(new Event('online'))
+      await screen.findByText('Shared again')
+      expect(screen.queryByRole('button', { name: 'Geri' })).toBeNull()
+    } finally {
+      vi.unstubAllGlobals()
+      resetCloudStatus()
+    }
+  })
 })

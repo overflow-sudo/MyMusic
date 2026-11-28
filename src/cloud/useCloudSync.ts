@@ -7,6 +7,7 @@ import { syncLibraryOnce, type LibrarySyncApi } from './syncLibrary'
 
 export const SYNC_DEBOUNCE_MS = 2_000
 export const SYNC_INTERVAL_MS = 60_000
+const FAILED_TEXT = 'Eşitleme tamamlanamadı'
 
 interface Options {
   /** The local library is loaded and usable. */
@@ -26,7 +27,18 @@ const defaultMakeApi = (s: Session): LibrarySyncApi => createApi(s)
 /** Background library sync: on mount/session, 2 s after local changes, every 60 s, on `online`, and on syncNow(). Never throws. */
 export function useCloudSync({ ready, busy, revision, getLocalSongs, applyMerged, makeApi = defaultMakeApi }: Options): { syncNow(): void } {
   const [session, setSessionState] = useState(getSession)
-  useEffect(() => onSessionChange(() => setSessionState(getSession())), [])
+  // Session generation that got a 401: automatic passes wait for a new session (or syncNow).
+  const authBlocked = useRef<number | null>(null)
+  useEffect(
+    () =>
+      onSessionChange(() => {
+        const next = getSession()
+        // A new login clears needs-login here, not only in CloudSettings, so the automatic pass runs.
+        if (next && getCloudStatus().state === 'needs-login') setCloudStatus('connected')
+        setSessionState(next)
+      }),
+    [],
+  )
 
   const deps = useRef({ session, ready, busy, getLocalSongs, applyMerged, makeApi })
   useEffect(() => {
@@ -46,7 +58,7 @@ export function useCloudSync({ ready, busy, revision, getLocalSongs, applyMerged
     const d = deps.current
     if (!alive.current || !d.session || !d.ready) return
     // After a 401 only the user (Şimdi eşitle / new login) starts a pass.
-    if (!manual && getCloudStatus().state === 'needs-login') return
+    if (!manual && authBlocked.current === sessionGeneration()) return
     if (running.current || d.busy) {
       again.current = true
       return
@@ -57,16 +69,22 @@ export function useCloudSync({ ready, busy, revision, getLocalSongs, applyMerged
     const mine = () => sessionGeneration() === gen
     setCloudStatus('syncing')
     try {
-      await syncLibraryOnce({ api: d.makeApi(d.session), getLocalSongs: () => deps.current.getLocalSongs(), applyMerged: (s) => deps.current.applyMerged(s) })
+      const stats = await syncLibraryOnce({ api: d.makeApi(d.session), getLocalSongs: () => deps.current.getLocalSongs(), applyMerged: (s) => deps.current.applyMerged(s) })
+      // Task 11: tracks/covers → recording deletes → recording uploads continue here.
+      // Re-check deps.current.busy before every upload step (a take may have started during the library step).
       if (mine()) {
-        setCloudStatus('connected')
+        authBlocked.current = null
+        setCloudStatus('connected', stats.failed > 0 ? FAILED_TEXT : null)
         markSynced()
       }
     } catch (e) {
       if (mine()) {
-        if (e instanceof CloudError && e.kind === 'auth') setCloudStatus('needs-login')
+        if (e instanceof CloudError && e.kind === 'auth') {
+          authBlocked.current = gen
+          setCloudStatus('needs-login')
+        }
         else if (e instanceof CloudError && e.kind === 'offline') setCloudStatus('offline', getCloudStatus().lastError)
-        else setCloudStatus('connected', 'Eşitleme tamamlanamadı')
+        else setCloudStatus('connected', FAILED_TEXT)
       }
     } finally {
       running.current = false

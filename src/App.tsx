@@ -64,6 +64,13 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
       cancelled = true
     }
   }, [root, songs, lib.status, countsVersion, deletedTick])
+  // The open song was deleted by a sync from the other computer: back to the list (it must not reopen if it returns).
+  useEffect(() => {
+    if (lib.status !== 'ready' || !selectedSongId || selected) return
+    setSelectedSongId(null)
+    setRecorderBusy(false)
+    setCountsVersion((v) => v + 1)
+  }, [lib.status, selectedSongId, selected])
   if (lib.status === 'loading') return <main className="screen narrow"><p className="dim">Yükleniyor…</p></main>
   if (lib.status === 'broken') return <BrokenLibrary error={lib.error} onReset={lib.resetBroken} />
   // SongList stays mounted (hidden) so its tab and search survive opening a song.

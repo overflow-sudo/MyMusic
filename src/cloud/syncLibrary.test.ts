@@ -98,4 +98,12 @@ describe('syncLibraryOnce', () => {
     await h.run()
     expect(h.state.local.map((s) => s.id)).toEqual(['a'])
   })
+
+  it('a local tombstone with a cover the server tombstone lacks is not re-put every pass', async () => {
+    const local = song('a', T1, { deletedAt: T1, cover: { source: 'itunes', fileName: 'cover.jpg' } })
+    const h = harness([local], [song('a', T1, { deletedAt: T1 })])
+    await h.run()
+    await h.run()
+    expect(h.api.putSong).not.toHaveBeenCalled()
+  })
 })

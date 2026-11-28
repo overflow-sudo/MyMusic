@@ -63,8 +63,10 @@ export class Library {
       }
       const inTrack = isObj(incoming.track) ? incoming.track : undefined
       const stTrack = isObj(stored.track) ? stored.track : undefined
-      if (inTrack?.hash && !stTrack?.hash) {
-        merged.track = { ...(stTrack ?? inTrack), hash: inTrack.hash }
+      // Same rule as the client (src/cloud/merge.ts): only a hash for the same stored track file; never adopt a whole track.
+      if (stTrack && inTrack && !stTrack.hash && typeof inTrack.hash === 'string' && inTrack.hash
+        && typeof stTrack.fileName === 'string' && stTrack.fileName === inTrack.fileName) {
+        merged.track = { ...stTrack, hash: inTrack.hash }
         changed = true
       }
       if (changed) { this.save(merged); return merged }
