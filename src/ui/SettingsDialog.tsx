@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { resolveOutputDevice } from '../audio/devices'
 import { measureAutoLatencyMs } from '../audio/latency'
+import CloudSettings from './CloudSettings'
 import LightColorPicker from './LightColorPicker'
 import LightModeSegment from './LightModeSegment'
 
@@ -11,11 +12,14 @@ interface Props {
   onClose(): void
   /** Measures the auto value; injectable for tests. */
   measureAuto?: () => Promise<number | null>
+  /** Cloud sync trigger and fetch (injectable for tests). */
+  onSyncNow?: () => void
+  cloudFetch?: typeof fetch
 }
 
 const defaultMeasure = async () => measureAutoLatencyMs(await resolveOutputDevice())
 
-export default function SettingsDialog({ value, onSave, onClose, measureAuto = defaultMeasure }: Props) {
+export default function SettingsDialog({ value, onSave, onClose, measureAuto = defaultMeasure, onSyncNow, cloudFetch }: Props) {
   const [text, setText] = useState(value === null ? '' : String(value))
   const [auto, setAuto] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -85,6 +89,7 @@ export default function SettingsDialog({ value, onSave, onClose, measureAuto = d
           <LightColorPicker />
           <p className="muted">Ritme göre nabız atan ışık. Şarkı ekranındaki ⚙ panelinden de değiştirilebilir.</p>
         </div>
+        <CloudSettings onSyncNow={onSyncNow} fetchImpl={cloudFetch} />
         {error && (
           <p className="note" role="alert">
             {error}

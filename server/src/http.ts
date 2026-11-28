@@ -112,7 +112,7 @@ export class Router {
       Vary: 'Origin',
       'Access-Control-Allow-Headers': ALLOW_HEADERS,
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Expose-Headers': 'Retry-After',
+      'Access-Control-Expose-Headers': 'Retry-After, X-Content-SHA256',
       'Access-Control-Max-Age': '600',
     }
   }
