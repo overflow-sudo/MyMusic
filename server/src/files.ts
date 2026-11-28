@@ -70,7 +70,9 @@ export class Files {
       .run(songId, kind, rel, hash, size, mime)
     try { await rename(tmp, dest) } catch (e) {
       await rm(tmp, { force: true })
-      this.db.prepare('DELETE FROM files WHERE song_id = ? AND kind = ?').run(songId, kind)
+      if (old) {
+        this.db.prepare('UPDATE files SET path=?, hash=?, size=?, mime=? WHERE song_id=? AND kind=?').run(old.path, old.hash, old.size, old.mime, songId, kind)
+      } else this.db.prepare('DELETE FROM files WHERE song_id = ? AND kind = ?').run(songId, kind)
       throw isLive() ? e : new HttpError(409, 'Unknown or deleted song')
     }
     if (old && old.path !== rel) await rm(join(this.filesRoot, old.path), { force: true })

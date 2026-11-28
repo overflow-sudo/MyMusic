@@ -21,11 +21,15 @@ export interface CompleteInput {
 /** Plug-in point for `complete`: Task 6 registers 'recording'. Throw HttpError to reject (upload dir is removed). */
 export type UploadTarget = (input: CompleteInput) => Promise<unknown>
 
-interface State { parts: Map<number, number>; inflight: Map<number, number>; closed: boolean }
+export const IDLE_EVICT_MS = 10 * 60 * 1000
+
+interface State { lastActivity: number; parts: Map<number, number>; inflight: Map<number, number>; closed: boolean }
 
 export class Uploads {
   private targets = new Map<string, UploadTarget>()
   private states = new Map<string, State>()
+  /** Injectable clock (tests). */
+  now: () => number = Date.now
   constructor(private db: Db, private dataDir: string, private maxBytes: number) {}
 
   registerTarget(name: string, fn: UploadTarget): void { this.targets.set(name, fn) }
@@ -33,11 +37,43 @@ export class Uploads {
   private dir(id: string): string { return join(this.dataDir, 'uploads', id) }
   private get maxParts(): number { return Math.ceil(this.maxBytes / PART_BYTES) }
 
-  create(now = Date.now()): { uploadId: string } {
+  /** Removes row, state and dir of an upload. */
+  private async discard(id: string): Promise<void> {
+    this.db.prepare('DELETE FROM uploads WHERE id = ?').run(id)
+    this.states.delete(id)
+    await rm(this.dir(id), { recursive: true, force: true })
+  }
+
+  /** At the cap: evict the oldest upload idle for >= 10 min; false if every open upload is active. */
+  private async evictIdle(now: number): Promise<boolean> {
+    const rows = this.db.prepare('SELECT id, created_at FROM uploads').all() as { id: string; created_at: string }[]
+    let best: { id: string; act: number } | undefined
+    for (const r of rows) {
+      const st = this.states.get(r.id)
+      if (st && (st.closed || st.inflight.size > 0)) continue
+      const act = st?.lastActivity ?? Date.parse(r.created_at)
+      if (now - act >= IDLE_EVICT_MS && (!best || act < best.act)) best = { id: r.id, act }
+    }
+    if (!best) return false
+    await this.discard(best.id)
+    return true
+  }
+
+  /** Client abort after a failed attempt. */
+  async abort(id: string): Promise<unknown> {
+    const st = await this.state(id)
+    if (st.closed) throw new HttpError(409, 'Upload is being completed')
+    if (st.inflight.size > 0) throw new HttpError(409, 'A part is still being uploaded')
+    await this.discard(id)
+    return { ok: true }
+  }
+
+  async create(now = this.now()): Promise<{ uploadId: string }> {
     const { n } = this.db.prepare('SELECT COUNT(*) AS n FROM uploads').get() as { n: number }
-    if (n >= MAX_OPEN_UPLOADS) throw new HttpError(429, 'Too many open uploads', { 'Retry-After': '60' })
+    if (n >= MAX_OPEN_UPLOADS && !(await this.evictIdle(now))) throw new HttpError(429, 'Too many open uploads', { 'Retry-After': '60' })
     const uploadId = randomBytes(16).toString('base64url')
     this.db.prepare('INSERT INTO uploads (id, created_at) VALUES (?, ?)').run(uploadId, new Date(now).toISOString())
+    this.states.set(uploadId, { lastActivity: now, parts: new Map(), inflight: new Map(), closed: false })
     return { uploadId }
   }
 
@@ -52,7 +88,7 @@ export class Uploads {
     let names: string[] = []
     try { names = await readdir(this.dir(id)) } catch { /* none yet */ }
     for (const f of names) if (/^\d+$/.test(f)) parts.set(Number(f), (await stat(join(this.dir(id), f))).size)
-    st = this.states.get(id) ?? { parts, inflight: new Map(), closed: false }
+    st = this.states.get(id) ?? { lastActivity: Date.parse((this.db.prepare('SELECT created_at FROM uploads WHERE id = ?').get(id) as { created_at: string }).created_at), parts, inflight: new Map(), closed: false }
     this.states.set(id, st)
     return st
   }
@@ -76,6 +112,7 @@ export class Uploads {
     const tooBig = () => new HttpError(413, 'Upload too large', { Connection: 'close' })
     if (reserve > room) { ctx.req.resume(); throw tooBig() }
     st.inflight.set(n, reserve)
+    st.lastActivity = this.now()
     const dir = this.dir(id)
     const tmp = join(dir, `${n}.${randomBytes(6).toString('hex')}.tmp`)
     let size = 0
@@ -98,6 +135,7 @@ export class Uploads {
       throw e
     } finally {
       st.inflight.delete(n)
+      st.lastActivity = this.now()
     }
     return { size }
   }

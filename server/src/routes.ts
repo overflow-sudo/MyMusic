@@ -23,6 +23,7 @@ export function registerLibraryRoutes(router: Router, lib: Library, files: Files
   }
 
   router.add('POST', '/api/uploads', () => uploads.create())
+  router.add('DELETE', '/api/uploads/:id', (ctx) => uploads.abort(ctx.params.id))
   router.add('PUT', '/api/uploads/:id/:n', (ctx) => uploads.putPart(ctx), { json: false })
   router.add('POST', '/api/uploads/:id/complete', (ctx) => uploads.complete(ctx.params.id, ctx.body))
 }

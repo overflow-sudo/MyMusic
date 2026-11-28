@@ -146,10 +146,44 @@ describe('uploads and files', () => {
     expect(rs.map((r) => r.status).sort()).toEqual([200, 413])
   })
 
-  it('at most 8 open uploads -> 429', async () => {
+  it('at most 8 active uploads -> 429; idle (>= 10 min) oldest is evicted instead', async () => {
     const { api } = await boot()
-    for (let i = 0; i < 8; i++) expect((await api('POST', '/api/uploads')).status).toBe(200)
+    let t = Date.now()
+    h.app.uploads.now = () => t
+    const ids: string[] = []
+    for (let i = 0; i < 8; i++) {
+      const r = await api('POST', '/api/uploads')
+      expect(r.status).toBe(200)
+      ids.push(((await r.json()) as { uploadId: string }).uploadId)
+      t += 1000
+    }
     expect((await api('POST', '/api/uploads')).status).toBe(429)
+    t += 10 * 60 * 1000
+    // Part activity keeps the first one alive, so the second-oldest is evicted.
+    expect((await api('PUT', `/api/uploads/${ids[0]}/0`, new Uint8Array(1))).status).toBe(200)
+    expect((await api('POST', '/api/uploads')).status).toBe(200)
+    expect((await api('PUT', `/api/uploads/${ids[0]}/1`, new Uint8Array(1))).status).toBe(200)
+    expect((await api('PUT', `/api/uploads/${ids[1]}/0`, new Uint8Array(1))).status).toBe(404)
+  })
+
+  it('DELETE /api/uploads/:id removes row and dir; refuses while a part is in flight', async () => {
+    const { api, auth } = await boot()
+    const { uploadId } = await (await api('POST', '/api/uploads')).json() as { uploadId: string }
+    await api('PUT', `/api/uploads/${uploadId}/0`, new Uint8Array(3))
+    const dir = join(h.config.dataDir, 'uploads', uploadId)
+    const url = new URL(h.base)
+    const req = httpRequest({ host: url.hostname, port: url.port, method: 'PUT', path: `/api/uploads/${uploadId}/1`, headers: { ...auth, 'Content-Length': '10' } })
+    req.on('error', () => {})
+    req.write(Buffer.alloc(3))
+    await new Promise((r) => setTimeout(r, 100))
+    expect((await api('DELETE', `/api/uploads/${uploadId}`)).status).toBe(409)
+    req.destroy()
+    for (let i = 0; i < 40 && h.app.uploads['states'].get(uploadId)?.inflight.size; i++) await new Promise((r) => setTimeout(r, 25))
+    expect((await api('DELETE', `/api/uploads/${uploadId}`)).status).toBe(200)
+    expect(existsSync(dir)).toBe(false)
+    expect(h.app.db.prepare('SELECT COUNT(*) AS n FROM uploads').get()).toEqual({ n: 0 })
+    expect((await api('DELETE', `/api/uploads/${uploadId}`)).status).toBe(404)
+    expect((await fetch(h.base + `/api/uploads/${uploadId}`, { method: 'DELETE' })).status).toBe(401)
   })
 
   it('aborted part leaves no .tmp and the part can be retried', async () => {
