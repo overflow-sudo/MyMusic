@@ -272,6 +272,13 @@ button.danger-link:hover { color: #f0574e; text-decoration: underline; text-unde
 .device-selectors { display: flex; flex-direction: column; gap: 12px; align-self: stretch; }
 .recordings { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; }
 .recording { border-bottom: 1px solid var(--line); }
+.recording-head { display: flex; align-items: center; gap: 4px; }
+.recording-head .recording-row { flex: 1 1 auto; min-width: 0; }
+.recording-actions { display: flex; align-items: center; gap: 2px; flex: none; }
+.recording-confirm { gap: 10px; flex-wrap: wrap; justify-content: flex-end; font-size: 14px; }
+.recording-confirm button { min-height: 36px; }
+.recording-confirm button.danger { color: var(--rec); border-color: var(--rec); }
+.recording-error { color: var(--rec); flex-basis: 100%; text-align: right; }
 .recording-row {
   display: grid; grid-template-columns: 1fr auto auto; gap: 16px; width: 100%; text-align: left;
   background: transparent; border: 0; border-radius: 0; padding: 14px 0; font-variant-numeric: tabular-nums;

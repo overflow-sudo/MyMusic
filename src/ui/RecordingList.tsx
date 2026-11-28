@@ -1,14 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatTimecode } from '../domain/time'
 import type { Song } from '../domain/types'
 import type { FsDir } from '../storage/fsDir'
 import Player from './Player'
 import { measureDuration } from './measureDuration'
-import { listRecordings, songDir, type RecordingEntry } from '../storage/repo'
+import RecordingActions, { downloadFile } from './RecordingActions'
+import { deleteRecording, listRecordings, songDir, type RecordingEntry } from '../storage/repo'
 
 interface Props {
   root: FsDir
   song: Song
+  /** Called after a recording was deleted (the parent refreshes counts). */
+  onChanged?: () => void
+  /** Element id that receives focus when the last recording is deleted. */
+  headingId?: string
 }
 
 const dateFormat = new Intl.DateTimeFormat('tr-TR', {
@@ -25,7 +30,7 @@ async function openFile(root: FsDir, song: Song, fileName: string): Promise<File
   return (await songDir(root, song)).readFile(fileName)
 }
 
-function Row({ root, song, entry }: { root: FsDir; song: Song; entry: RecordingEntry }) {
+function Row({ root, song, entry, onDelete }: { root: FsDir; song: Song; entry: RecordingEntry; onDelete: () => Promise<void> }) {
   const [playUrl, setPlayUrl] = useState<string | null>(null)
   const [duration, setDuration] = useState<number | null>(null)
   const [error, setError] = useState(false)
@@ -71,21 +76,36 @@ function Row({ root, song, entry }: { root: FsDir; song: Song; entry: RecordingE
     }
   }
 
+  const download = async () => {
+    setError(false)
+    try {
+      const file = await openFile(root, song, entry.fileName)
+      if (!file) return setError(true)
+      downloadFile(file, entry.fileName)
+    } catch {
+      setError(true)
+    }
+  }
+
   return (
     <li className="recording">
-      <button className="recording-row" onClick={() => void toggle()} aria-expanded={playUrl !== null}>
-        <span>{formatRecordingDate(entry.date)}</span>
-        <span>{entry.kind}</span>
-        <span>{duration === null ? '' : formatTimecode(duration)}</span>
-      </button>
+      <div className="recording-head">
+        <button className="recording-row" data-file={entry.fileName} onClick={() => void toggle()} aria-expanded={playUrl !== null}>
+          <span>{formatRecordingDate(entry.date)}</span>
+          <span>{entry.kind}</span>
+          <span>{duration === null ? '' : formatTimecode(duration)}</span>
+        </button>
+        <RecordingActions onDownload={download} onDelete={onDelete} />
+      </div>
       {error && <p className="note" role="alert">Kayıt açılamadı.</p>}
       {playUrl && <Player src={playUrl} kind={entry.kind === 'video' ? 'video' : 'audio'} autoPlay />}
     </li>
   )
 }
 
-export default function RecordingList({ root, song }: Props) {
+export default function RecordingList({ root, song, onChanged, headingId }: Props) {
   const [entries, setEntries] = useState<RecordingEntry[] | null>(null)
+  const focusAfter = useRef<{ file: string | null } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -98,12 +118,32 @@ export default function RecordingList({ root, song }: Props) {
     }
   }, [root, song.folderName]) // eslint-disable-line react-hooks/exhaustive-deps -- a status/bpm patch must not reload
 
+  // After a delete: focus the next row's main control, else the list heading.
+  useEffect(() => {
+    const f = focusAfter.current
+    if (!f || entries === null) return
+    focusAfter.current = null
+    const btn = f.file ? [...document.querySelectorAll<HTMLElement>('.recording-row')].find((b) => b.dataset.file === f.file) : null
+    if (btn) btn.focus()
+    else if (headingId) document.getElementById(headingId)?.focus()
+  }, [entries, headingId])
+
+  const remove = async (fileName: string) => {
+    await deleteRecording(root, song, fileName)
+    const list = entries ?? []
+    const i = list.findIndex((e) => e.fileName === fileName)
+    const rest = list.filter((e) => e.fileName !== fileName)
+    focusAfter.current = { file: (rest[i] ?? rest[i - 1])?.fileName ?? null }
+    setEntries(rest)
+    onChanged?.()
+  }
+
   if (entries === null) return null
   if (entries.length === 0) return <p className="muted">Henüz kayıt yok.</p>
   return (
     <ul className="recordings">
       {entries.map((e) => (
-        <Row key={e.fileName} root={root} song={song} entry={e} />
+        <Row key={e.fileName} root={root} song={song} entry={e} onDelete={() => remove(e.fileName)} />
       ))}
     </ul>
   )

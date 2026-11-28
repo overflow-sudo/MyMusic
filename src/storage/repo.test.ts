@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createMemoryDir } from './memoryDir'
 import {
-  backupBrokenLibrary, importTrack, listRecordings, loadLibrary, readTrack, removeTrack, saveLibrary, songDir,
+  backupBrokenLibrary, deleteRecording, importTrack, listRecordings, loadLibrary, readTrack, removeTrack, saveLibrary, songDir,
 } from './repo'
 import { createSong, emptyLibrary } from '../domain/library'
 import type { Song } from '../domain/types'
@@ -113,5 +113,40 @@ describe('recordings and tracks', () => {
     expect(await (await readTrack(root, song))!.text()).toBe('abc')
     await removeTrack(root, song)
     expect(await readTrack(root, song)).toBeNull()
+  })
+})
+
+describe('deleteRecording', () => {
+  it('removes exactly that file and keeps the rest', async () => {
+    const root = createMemoryDir()
+    const song = mkSong()
+    const d = await songDir(root, song)
+    await d.writeFile('2026-11-20_19-05-12_ses.webm', 'a')
+    await d.writeFile('2026-11-21_19-05-12_ses.webm', 'b')
+    await d.writeFile('track.mp3', 't')
+    await deleteRecording(root, song, '2026-11-20_19-05-12_ses.webm')
+    expect((await listRecordings(root, song)).map((e) => e.fileName)).toEqual(['2026-11-21_19-05-12_ses.webm'])
+    expect(await d.readFile('track.mp3')).not.toBeNull()
+  })
+  it('is case-sensitive: a differently-cased name deletes nothing', async () => {
+    const root = createMemoryDir()
+    const song = mkSong()
+    const d = await songDir(root, song)
+    await d.writeFile('2026-11-20_19-05-12_ses.webm', 'a')
+    await deleteRecording(root, song, '2026-11-20_19-05-12_SES.webm')
+    expect(await listRecordings(root, song)).toHaveLength(1)
+  })
+  it('resolves for a missing file and creates no folders', async () => {
+    const root = createMemoryDir()
+    await expect(deleteRecording(root, mkSong(), '2026-11-20_19-05-12_ses.webm')).resolves.toBeUndefined()
+    expect(await root.dir('recordings')).toBeNull()
+  })
+  it('never deletes non-recording names such as the track or subfolders', async () => {
+    const root = createMemoryDir()
+    const song = mkSong()
+    const d = await songDir(root, song)
+    await d.writeFile('track.mp3', 't')
+    await deleteRecording(root, song, 'track.mp3')
+    expect(await d.readFile('track.mp3')).not.toBeNull()
   })
 })

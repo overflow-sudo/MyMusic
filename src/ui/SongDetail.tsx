@@ -27,6 +27,8 @@ interface Props {
   drawerSlot?: ReactNode
   /** Bumped by the parent when a take was saved, so the list reloads. */
   recordingsVersion?: number
+  /** A recording was deleted: the parent refreshes its counts. */
+  onRecordingsChanged?: () => void
   /** A take is running: the settings gear is disabled so the take can't be hidden behind a dialog. */
   busy?: boolean
   /** Cover search/storage; without it the song screen shows no cover. */
@@ -40,7 +42,7 @@ const STATUS: { value: SongStatus; label: string }[] = [
 // Status words are Turkish (ı → I, i → İ); artist names are often not ("Oasis" must not become "OASİS").
 const upperTr = (s: string) => s.toLocaleUpperCase('tr-TR')
 
-export default function SongDetail({ song, root, onBack, patchSong, deleteSong, recorder, drawerSlot, recordingsVersion = 0, busy = false, covers }: Props) {
+export default function SongDetail({ song, root, onBack, patchSong, deleteSong, recorder, drawerSlot, recordingsVersion = 0, onRecordingsChanged, busy = false, covers }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [saveError, setSaveError] = useState(false)
@@ -175,8 +177,8 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
         </div>
 
         <section className="song-recordings">
-          <h2>Kayıtlar</h2>
-          <RecordingList key={recordingsVersion} root={root} song={song} />
+          <h2 id="recordings-heading" tabIndex={-1}>Kayıtlar</h2>
+          <RecordingList key={recordingsVersion} root={root} song={song} onChanged={onRecordingsChanged} headingId="recordings-heading" />
         </section>
       </div>
 

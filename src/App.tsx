@@ -30,6 +30,7 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
   const [selectedSongId, setSelectedSongId] = useState<string | null>(null)
   const [recordingCounts, setRecordingCounts] = useState<Record<string, number>>({})
   const [countsVersion, setCountsVersion] = useState(0)
+  const [deletedTick, setDeletedTick] = useState(0) // recount without remounting the open list (keeps focus)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [recorderBusy, setRecorderBusy] = useState(false)
   const songs = lib.library.songs
@@ -54,7 +55,7 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
     return () => {
       cancelled = true
     }
-  }, [root, songs, lib.status, countsVersion])
+  }, [root, songs, lib.status, countsVersion, deletedTick])
   if (lib.status === 'loading') return <main className="screen narrow"><p className="dim">Yükleniyor…</p></main>
   if (lib.status === 'broken') return <BrokenLibrary error={lib.error} onReset={lib.resetBroken} />
   // SongList stays mounted (hidden) so its tab and search survive opening a song.
@@ -91,6 +92,7 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
           deleteSong={lib.deleteSong}
           covers={covers}
           recordingsVersion={countsVersion}
+          onRecordingsChanged={() => setDeletedTick((v) => v + 1)}
           busy={recorderBusy}
           recorder={(drawerOpen) => (
             <Recorder

@@ -47,6 +47,15 @@ export async function listRecordings(root: FsDir, song: Song): Promise<Recording
   return out.sort((a, b) => b.date.getTime() - a.date.getTime())
 }
 
+/** Deletes exactly this recording (case-sensitive name, recording names only). A missing file is not an error. */
+export async function deleteRecording(root: FsDir, song: Song, fileName: string): Promise<void> {
+  if (!parseRecordingFileName(fileName)) return
+  const dir = await existingSongDir(root, song)
+  if (!dir) return
+  const hit = (await dir.list()).find((e) => e.kind === 'file' && e.name === fileName)
+  if (hit) await dir.remove(hit.name)
+}
+
 const isTrackFile = (name: string) => /^track\./.test(name)
 
 export async function importTrack(root: FsDir, song: Song, file: File): Promise<Track> {
