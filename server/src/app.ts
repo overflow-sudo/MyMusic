@@ -33,6 +33,7 @@ export function createApp(config: Config, logger: Logger = consoleLogger): App {
   registerLibraryRoutes(router, library, files, uploads)
 
   const sweep = () => { uploads.cleanupStaleUploads().catch((e) => logger.error('upload cleanup failed', { message: String(e) })) }
+  files.sweepTmp().catch((e) => logger.error('tmp sweep failed', { message: String(e) }))
   sweep()
   const timer = setInterval(sweep, 60 * 60 * 1000)
   timer.unref()

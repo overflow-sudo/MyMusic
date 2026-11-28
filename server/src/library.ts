@@ -5,6 +5,8 @@ import { HttpError } from './http.ts'
 import { validId } from './ids.ts'
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/
+const isIso = (v: unknown): v is string => typeof v === 'string' && ISO_RE.test(v) && Number.isFinite(Date.parse(v))
 const ts = (v: unknown): number => (typeof v === 'string' ? Date.parse(v) : NaN)
 
 export class Library {
@@ -36,7 +38,9 @@ export class Library {
     const id = validId(pathId, 'song id')
     if (!isObj(body)) throw new HttpError(400, 'Song must be an object')
     if (body.id !== id) throw new HttpError(400, 'Song id does not match path')
-    if (!Number.isFinite(ts(body.updatedAt))) throw new HttpError(400, 'updatedAt must be an ISO date string')
+    if (!isIso(body.updatedAt)) throw new HttpError(400, 'updatedAt must be an ISO date string')
+    if (body.deletedAt !== undefined && !isIso(body.deletedAt)) throw new HttpError(400, 'deletedAt must be an ISO date string')
+    if (typeof body.title !== 'string' || typeof body.artist !== 'string') throw new HttpError(400, 'title and artist must be strings')
     const incoming = body as SongRecord
     const stored = this.get(id)
     const inT = ts(incoming.updatedAt)
@@ -46,11 +50,17 @@ export class Library {
       if (typeof incoming.deletedAt === 'string' && incoming.deletedAt) await this.files.removeAll(id)
       return incoming
     }
-    if (inT === stT) {
+    if (inT === stT && !stored.deletedAt) {
       // Spec decision 7: automatic backfills do not bump updatedAt; keep the non-empty side.
       const merged: SongRecord = { ...stored }
       let changed = false
-      if (!stored.cover && incoming.cover) { merged.cover = incoming.cover; changed = true }
+      const stCover = isObj(stored.cover) ? stored.cover : undefined
+      const inCover = isObj(incoming.cover) ? incoming.cover : undefined
+      if (!stored.cover && inCover) { merged.cover = inCover; changed = true }
+      else if (stCover && inCover && !stCover.hash && inCover.hash
+        && stCover.source === inCover.source && stCover.fileName === inCover.fileName) {
+        merged.cover = { ...stCover, hash: inCover.hash }; changed = true
+      }
       const inTrack = isObj(incoming.track) ? incoming.track : undefined
       const stTrack = isObj(stored.track) ? stored.track : undefined
       if (inTrack?.hash && !stTrack?.hash) {

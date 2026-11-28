@@ -1,8 +1,8 @@
 import { createReadStream, createWriteStream } from 'node:fs'
-import { mkdir, rename, rm, stat } from 'node:fs/promises'
+import { mkdir, readdir, rename, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import type { Ctx } from './http.ts'
 import { HttpError } from './http.ts'
 import type { Db } from './db.ts'
@@ -11,7 +11,10 @@ import { validId } from './ids.ts'
 export type FileKind = 'track' | 'cover'
 export interface FileRow { song_id: string; kind: FileKind; path: string; hash: string | null; size: number; mime: string | null }
 
-const MIME_RE = /^[A-Za-z0-9][\w.+-]{0,62}\/[A-Za-z0-9][\w.+-]{0,62}$/
+const MIME_ALLOW: Record<FileKind, RegExp> = {
+  track: /^audio\/[A-Za-z0-9][\w.+-]{0,62}$/,
+  cover: /^image\/(png|jpeg|webp|gif)$/,
+}
 
 /** Lower-case alnum extension (max 5 chars) from a file name, or 'bin'. */
 export function safeExt(fileName: unknown): string {
@@ -25,10 +28,9 @@ export class Files {
   get filesRoot(): string { return join(this.dataDir, 'files') }
   songDir(songId: string): string { return join(this.filesRoot, 'songs', validId(songId, 'song id')) }
 
-  /** Stream/hash helper: concatenates `parts` into `dest` atomically. */
-  async assemble(parts: string[], dest: string): Promise<{ hash: string; size: number }> {
-    await mkdir(join(dest, '..'), { recursive: true })
-    const tmp = dest + '.tmp'
+  /** Stream/hash helper: concatenates `parts` into `tmp` (caller renames). */
+  async assemble(parts: string[], tmp: string): Promise<{ hash: string; size: number }> {
+    await mkdir(join(tmp, '..'), { recursive: true })
     const hash = createHash('sha256')
     let size = 0
     try {
@@ -43,7 +45,6 @@ export class Files {
         }
       })()
       await pipeline(source, out)
-      await rename(tmp, dest)
     } catch (e) {
       await rm(tmp, { force: true })
       throw e
@@ -51,18 +52,41 @@ export class Files {
     return { hash: hash.digest('hex'), size }
   }
 
-  /** Replaces the song's file of `kind` with the assembled file. */
-  async store(songId: string, kind: FileKind, fileName: unknown, mime: unknown, parts: string[]): Promise<{ hash: string; size: number }> {
+  /**
+   * Replaces the song's file of `kind` with the assembled file. `isLive` is re-checked right before the
+   * row is written, so a tombstone that arrived during assembly wins (409, file removed).
+   */
+  async store(songId: string, kind: FileKind, fileName: unknown, mime: unknown, parts: string[], isLive: () => boolean): Promise<{ hash: string; size: number }> {
+    if (typeof mime !== 'string' || !MIME_ALLOW[kind].test(mime)) throw new HttpError(415, 'Unsupported media type')
     this.songDir(songId)
     const rel = join('songs', songId, `${kind}.${safeExt(fileName)}`)
-    const { hash, size } = await this.assemble(parts, join(this.filesRoot, rel))
+    const dest = join(this.filesRoot, rel)
+    const tmp = `${dest}.${randomBytes(6).toString('hex')}.tmp`
+    const { hash, size } = await this.assemble(parts, tmp)
+    if (!isLive()) { await rm(tmp, { force: true }); throw new HttpError(409, 'Unknown or deleted song') }
     const old = this.row(songId, kind)
-    if (old && old.path !== rel) await rm(join(this.filesRoot, old.path), { force: true })
-    const m = typeof mime === 'string' && MIME_RE.test(mime) ? mime : 'application/octet-stream'
     this.db.prepare(`INSERT INTO files (song_id, kind, path, hash, size, mime) VALUES (?,?,?,?,?,?)
       ON CONFLICT(song_id, kind) DO UPDATE SET path=excluded.path, hash=excluded.hash, size=excluded.size, mime=excluded.mime`)
-      .run(songId, kind, rel, hash, size, m)
+      .run(songId, kind, rel, hash, size, mime)
+    try { await rename(tmp, dest) } catch (e) {
+      await rm(tmp, { force: true })
+      this.db.prepare('DELETE FROM files WHERE song_id = ? AND kind = ?').run(songId, kind)
+      throw isLive() ? e : new HttpError(409, 'Unknown or deleted song')
+    }
+    if (old && old.path !== rel) await rm(join(this.filesRoot, old.path), { force: true })
     return { hash, size }
+  }
+
+  /** Startup: remove stray *.tmp files left by a crashed assemble. */
+  async sweepTmp(): Promise<void> {
+    const root = join(this.filesRoot, 'songs')
+    let dirs: string[] = []
+    try { dirs = await readdir(root) } catch { return }
+    for (const d of dirs) {
+      let names: string[] = []
+      try { names = await readdir(join(root, d)) } catch { continue }
+      for (const f of names) if (f.endsWith('.tmp')) await rm(join(root, d, f), { force: true })
+    }
   }
 
   row(songId: string, kind: FileKind): FileRow | undefined {
@@ -95,6 +119,8 @@ export class Files {
       'Content-Type': row.mime ?? 'application/octet-stream',
       'Accept-Ranges': 'bytes',
       'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': 'sandbox',
     }
     if (row.hash) headers['X-Content-SHA256'] = row.hash
     let start = 0

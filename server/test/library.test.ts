@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { createHash } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { request as httpRequest } from 'node:http'
 import { login, PASSWORD, start, type Harness } from './helpers.ts'
@@ -47,10 +47,10 @@ describe('library', () => {
   it('equal updatedAt keeps stored but fills missing cover and track.hash', async () => {
     const { api } = await boot()
     await api('PUT', '/api/songs/song-0001', song({ title: 'Stored', track: { name: 'a.mp3' } }))
-    const r = await api('PUT', '/api/songs/song-0001', song({ title: 'Other', cover: 'c.jpg', track: { name: 'b.mp3', hash: 'abc' } }))
-    expect(await r.json()).toEqual(song({ title: 'Stored', cover: 'c.jpg', track: { name: 'a.mp3', hash: 'abc' } }))
-    const again = await api('PUT', '/api/songs/song-0001', song({ cover: 'zzz', track: { hash: 'other' } }))
-    expect(await again.json()).toEqual(song({ title: 'Stored', cover: 'c.jpg', track: { name: 'a.mp3', hash: 'abc' } }))
+    const r = await api('PUT', '/api/songs/song-0001', song({ title: 'Other', cover: { source: 'user', fileName: 'c.jpg' }, track: { name: 'b.mp3', hash: 'abc' } }))
+    expect(await r.json()).toEqual(song({ title: 'Stored', cover: { source: 'user', fileName: 'c.jpg' }, track: { name: 'a.mp3', hash: 'abc' } }))
+    const again = await api('PUT', '/api/songs/song-0001', song({ cover: { source: 'itunes', fileName: 'z.jpg', hash: 'zz' }, track: { hash: 'other' } }))
+    expect(await again.json()).toEqual(song({ title: 'Stored', cover: { source: 'user', fileName: 'c.jpg' }, track: { name: 'a.mp3', hash: 'abc' } }))
   })
 
   it('validates id, updatedAt and shape', async () => {
@@ -67,11 +67,16 @@ describe('library', () => {
     const bytes = Buffer.from('hello')
     const u = await upload(api, [bytes], { target: 'cover', songId: 'song-0001', fileName: 'c.png', mime: 'image/png' })
     expect((await u.complete()).status).toBe(200)
+    const t = await upload(api, [bytes], { target: 'track', songId: 'song-0001', fileName: 't.mp3', mime: 'audio/mpeg' })
+    expect((await t.complete()).status).toBe(200)
+    const tpath = join(h.config.dataDir, 'files', 'songs', 'song-0001', 'track.mp3')
+    expect(existsSync(tpath)).toBe(true)
     const path = join(h.config.dataDir, 'files', 'songs', 'song-0001', 'cover.png')
     expect(existsSync(path)).toBe(true)
     const tomb = song({ updatedAt: '2026-03-01T00:00:00.000Z', deletedAt: '2026-03-01T00:00:00.000Z' })
     expect(await (await api('PUT', '/api/songs/song-0001', tomb)).json()).toEqual(tomb)
     expect(existsSync(path)).toBe(false)
+    expect(existsSync(tpath)).toBe(false)
     expect(h.app.db.prepare('SELECT COUNT(*) AS n FROM files').get()).toEqual({ n: 0 })
     expect((await api('GET', '/api/songs/song-0001/cover')).status).toBe(404)
     expect(((await (await api('GET', '/api/library')).json()) as { songs: unknown[] }).songs).toEqual([tomb])
@@ -123,12 +128,127 @@ describe('uploads and files', () => {
     expect(r.status).toBe(413)
   })
 
-  it('total over MAX_UPLOAD_BYTES -> 413', async () => {
-    const { api } = await boot({ MAX_UPLOAD_BYTES: '10' })
+  it('total over MAX_UPLOAD_BYTES -> 413; part index capped', async () => {
+    const MiB = 1024 * 1024
+    const { api } = await boot({ MAX_UPLOAD_BYTES: String(33 * MiB) })
     const { uploadId } = await (await api('POST', '/api/uploads')).json() as { uploadId: string }
-    expect((await api('PUT', `/api/uploads/${uploadId}/0`, new Uint8Array(6))).status).toBe(200)
-    expect((await api('PUT', `/api/uploads/${uploadId}/1`, new Uint8Array(5))).status).toBe(413)
-    expect((await api('PUT', `/api/uploads/${uploadId}/1`, new Uint8Array(4))).status).toBe(200)
+    expect((await api('PUT', `/api/uploads/${uploadId}/0`, new Uint8Array(32 * MiB))).status).toBe(200)
+    expect((await api('PUT', `/api/uploads/${uploadId}/1`, new Uint8Array(MiB + 1))).status).toBe(413)
+    expect((await api('PUT', `/api/uploads/${uploadId}/1`, new Uint8Array(MiB))).status).toBe(200)
+    expect((await api('PUT', `/api/uploads/${uploadId}/2`, new Uint8Array(1))).status).toBe(400)
+  })
+
+  it('concurrent parts cannot exceed MAX_UPLOAD_BYTES together', async () => {
+    const MiB = 1024 * 1024
+    const { api } = await boot({ MAX_UPLOAD_BYTES: String(33 * MiB) })
+    const { uploadId } = await (await api('POST', '/api/uploads')).json() as { uploadId: string }
+    const rs = await Promise.all([0, 1].map((i) => api('PUT', `/api/uploads/${uploadId}/${i}`, new Uint8Array(20 * MiB))))
+    expect(rs.map((r) => r.status).sort()).toEqual([200, 413])
+  })
+
+  it('at most 8 open uploads -> 429', async () => {
+    const { api } = await boot()
+    for (let i = 0; i < 8; i++) expect((await api('POST', '/api/uploads')).status).toBe(200)
+    expect((await api('POST', '/api/uploads')).status).toBe(429)
+  })
+
+  it('aborted part leaves no .tmp and the part can be retried', async () => {
+    const { api, auth } = await boot()
+    const { uploadId } = await (await api('POST', '/api/uploads')).json() as { uploadId: string }
+    await new Promise<void>((resolve) => {
+      const u = new URL(h.base)
+      const req = httpRequest({ host: u.hostname, port: u.port, method: 'PUT', path: `/api/uploads/${uploadId}/0`, headers: { ...auth, 'Content-Length': '1000' } })
+      req.on('error', () => resolve())
+      req.write(Buffer.alloc(100))
+      setTimeout(() => { req.destroy(); resolve() }, 50)
+    })
+    const dir = join(h.config.dataDir, 'uploads', uploadId)
+    for (let i = 0; i < 40 && readdirSync(dir).length; i++) await new Promise((r) => setTimeout(r, 25))
+    expect(readdirSync(dir)).toEqual([])
+    expect((await api('PUT', `/api/uploads/${uploadId}/0`, new Uint8Array(5))).status).toBe(200)
+  })
+
+  it('complete closes the upload: second complete 404, parts after close refused, in-flight part blocks complete', async () => {
+    const { api, auth } = await boot()
+    await api('PUT', '/api/songs/song-0001', song())
+    const u = await upload(api, [Buffer.from('abc')], { target: 'track', songId: 'song-0001', fileName: 'a.mp3', mime: 'audio/mpeg' })
+    expect((await u.complete()).status).toBe(200)
+    expect((await u.complete()).status).toBe(404)
+    expect((await api('PUT', `/api/uploads/${u.uploadId}/1`, new Uint8Array(1))).status).toBe(404)
+    // A part still streaming blocks complete with 409.
+    const { uploadId } = await (await api('POST', '/api/uploads')).json() as { uploadId: string }
+    await api('PUT', `/api/uploads/${uploadId}/0`, new Uint8Array(2))
+    const url = new URL(h.base)
+    const req = httpRequest({ host: url.hostname, port: url.port, method: 'PUT', path: `/api/uploads/${uploadId}/1`, headers: { ...auth, 'Content-Length': '10' } })
+    req.on('error', () => {})
+    req.write(Buffer.alloc(3))
+    await new Promise((r) => setTimeout(r, 100))
+    const c = await api('POST', `/api/uploads/${uploadId}/complete`, { target: 'track', songId: 'song-0001', fileName: 'a.mp3', mime: 'audio/mpeg' })
+    expect(c.status).toBe(409)
+    req.destroy()
+  })
+
+  it('rejects unsupported MIME types with 415 and sets hardening headers', async () => {
+    const { api } = await boot()
+    await api('PUT', '/api/songs/song-0001', song())
+    const bad = await upload(api, [Buffer.from('x')], { target: 'cover', songId: 'song-0001', fileName: 'c.svg', mime: 'image/svg+xml' })
+    expect((await bad.complete()).status).toBe(415)
+    const bad2 = await upload(api, [Buffer.from('x')], { target: 'track', songId: 'song-0001', fileName: 'a.html', mime: 'text/html' })
+    expect((await bad2.complete()).status).toBe(415)
+    const ok = await upload(api, [Buffer.from('x')], { target: 'cover', songId: 'song-0001', fileName: 'c.png', mime: 'image/png' })
+    expect((await ok.complete()).status).toBe(200)
+    const g = await api('GET', '/api/songs/song-0001/cover')
+    expect(g.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(g.headers.get('content-security-policy')).toBe('sandbox')
+  })
+
+  it('invalid Range forms -> 416', async () => {
+    const { api } = await boot()
+    await api('PUT', '/api/songs/song-0001', song())
+    const u = await upload(api, [Buffer.from('abcdef')], { target: 'track', songId: 'song-0001', fileName: 'a.mp3', mime: 'audio/mpeg' })
+    await u.complete()
+    for (const r of ['bytes=-0', 'bytes=0-1,3-4', 'bytes=-']) {
+      expect((await api('GET', '/api/songs/song-0001/track', undefined, { Range: r })).status).toBe(416)
+    }
+  })
+
+  it('song validation: ISO strictness, deletedAt, title/artist; tombstone is never back-filled', async () => {
+    const { api } = await boot()
+    expect((await api('PUT', '/api/songs/song-0001', song({ updatedAt: '2026-01-01' }))).status).toBe(400)
+    expect((await api('PUT', '/api/songs/song-0001', song({ deletedAt: 'x' }))).status).toBe(400)
+    expect((await api('PUT', '/api/songs/song-0001', song({ title: 3 }))).status).toBe(400)
+    const tomb = song({ deletedAt: '2026-01-01T00:00:00.000Z' })
+    await api('PUT', '/api/songs/song-0001', tomb)
+    expect(await (await api('PUT', '/api/songs/song-0001', song({ cover: { source: 'user', fileName: 'c.jpg' } }))).json()).toEqual(tomb)
+  })
+
+  it('cover.hash fills only when source and fileName match', async () => {
+    const { api } = await boot()
+    await api('PUT', '/api/songs/song-0001', song({ cover: { source: 'user', fileName: 'c.jpg' } }))
+    const diff = await api('PUT', '/api/songs/song-0001', song({ cover: { source: 'user', fileName: 'd.jpg', hash: 'h' } }))
+    expect(((await diff.json()) as { cover: object }).cover).toEqual({ source: 'user', fileName: 'c.jpg' })
+    const same = await api('PUT', '/api/songs/song-0001', song({ cover: { source: 'user', fileName: 'c.jpg', hash: 'h' } }))
+    expect(((await same.json()) as { cover: object }).cover).toEqual({ source: 'user', fileName: 'c.jpg', hash: 'h' })
+  })
+
+  it('cookie-only requests are 401 on every /api route', async () => {
+    const { api } = await boot()
+    const token = (await (await login(h, PASSWORD)).json() as { token: string }).token
+    void api
+    for (const p of ['/api/library', '/api/songs/song-0001/track', '/api/songs/song-0001/cover']) {
+      expect((await fetch(h.base + p, { headers: { Cookie: `mm_session=${token}` } })).status).toBe(401)
+    }
+  })
+
+  it('startup sweep removes stray .tmp under files/songs', async () => {
+    const { api } = await boot()
+    void api
+    const dir = join(h.config.dataDir, 'files', 'songs', 'song-0001')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'track.mp3.abc.tmp'), 'x')
+    writeFileSync(join(dir, 'track.mp3'), 'x')
+    await h.app.files.sweepTmp()
+    expect(readdirSync(dir)).toEqual(['track.mp3'])
   })
 
   it('requires Bearer on file and upload routes', async () => {
@@ -176,5 +296,9 @@ describe('uploads and files', () => {
     expect(await h.app.uploads.cleanupStaleUploads(now + 25 * 3600_000)).toBe(1)
     expect(existsSync(dir)).toBe(false)
     expect(h.app.db.prepare('SELECT COUNT(*) AS n FROM uploads').get()).toEqual({ n: 0 })
+    const orphan = join(h.config.dataDir, 'uploads', 'orphan-dir-1')
+    mkdirSync(orphan, { recursive: true })
+    await h.app.uploads.cleanupStaleUploads(now)
+    expect(existsSync(orphan)).toBe(false)
   })
 })

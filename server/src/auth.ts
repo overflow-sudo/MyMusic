@@ -44,12 +44,12 @@ export class Auth {
     return !!this.db.prepare('SELECT 1 FROM tokens WHERE hash = ?').get(hashToken(token))
   }
 
-  /** Bearer for everything; the mm_session cookie is accepted for GET/HEAD only (phone page). */
-  authenticate = (req: IncomingMessage): void => {
+  /** Bearer for everything; the mm_session cookie only on GET/HEAD routes explicitly marked `cookie: true` (phone page). */
+  authenticate = (req: IncomingMessage, allowCookie = false): void => {
     const header = req.headers.authorization
     const bearer = header?.match(/^Bearer\s+(\S+)$/i)?.[1]
     if (bearer && this.tokenValid(bearer)) return
-    if (!bearer && (req.method === 'GET' || req.method === 'HEAD')) {
+    if (!bearer && allowCookie && (req.method === 'GET' || req.method === 'HEAD')) {
       const cookie = req.headers.cookie?.split(';').map((c) => c.trim())
         .find((c) => c.startsWith(COOKIE_NAME + '='))?.slice(COOKIE_NAME.length + 1)
       if (cookie && this.tokenValid(cookie)) return

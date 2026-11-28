@@ -18,7 +18,7 @@ export function registerLibraryRoutes(router: Router, lib: Library, files: Files
     uploads.registerTarget(kind, async ({ body, parts }) => {
       const songId = validId(body.songId, 'song id')
       if (lib.status(songId) !== 'live') throw new HttpError(409, 'Unknown or deleted song')
-      return files.store(songId, kind, body.fileName, body.mime, parts)
+      return files.store(songId, kind, body.fileName, body.mime, parts, () => lib.status(songId) === 'live')
     })
   }
 

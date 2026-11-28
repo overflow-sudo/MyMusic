@@ -80,9 +80,10 @@ describe('http + auth', () => {
   it('cookie mm_session works for GET only', async () => {
     h = await start()
     const { token } = await (await login(h, PASSWORD)).json() as { token: string }
-    h.app.router.add('POST', '/api/ping', () => ({ ok: true }))
+    h.app.router.add('POST', '/api/ping', () => ({ ok: true }), { cookie: true })
+    h.app.router.add('GET', '/api/cookie-probe', () => ({ ok: true }), { cookie: true })
     const headers = { Cookie: `mm_session=${token}` }
-    expect((await fetch(h.base + '/api/library', { headers })).status).toBe(200)
+    expect((await fetch(h.base + '/api/cookie-probe', { headers })).status).toBe(200)
     expect((await fetch(h.base + '/api/ping', { method: 'POST', headers })).status).toBe(401)
   })
 

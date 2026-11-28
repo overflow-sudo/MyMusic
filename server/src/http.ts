@@ -23,10 +23,12 @@ export interface RouteOptions {
   auth?: boolean
   /** Parse body as JSON (max 1 MiB). Default true; set false for streaming routes. */
   json?: boolean
+  /** Also accept the mm_session cookie (GET/HEAD only). Default false: /api is Bearer-only. */
+  cookie?: boolean
 }
 
 type Handler = (ctx: Ctx) => unknown | Promise<unknown>
-interface Route { method: string; parts: string[]; handler: Handler; auth: boolean; json: boolean }
+interface Route { method: string; parts: string[]; handler: Handler; auth: boolean; json: boolean; cookie: boolean }
 
 export const JSON_MAX_BYTES = 1024 * 1024
 const ALLOW_HEADERS = 'Authorization, Content-Type, X-File-Name'
@@ -69,14 +71,14 @@ export class Router {
       allowedOrigins: string[]
       logger: Logger
       /** Throws HttpError(401) when the request is not authorised. */
-      authenticate: (req: IncomingMessage) => void
+      authenticate: (req: IncomingMessage, allowCookie: boolean) => void
     },
   ) {}
 
   add(method: string, path: string, handler: Handler, o: RouteOptions = {}): void {
     this.routes.push({
       method, parts: path.split('/').filter(Boolean), handler,
-      auth: o.auth !== false, json: o.json !== false,
+      auth: o.auth !== false, json: o.json !== false, cookie: o.cookie === true,
     })
   }
 
@@ -138,7 +140,7 @@ export class Router {
       const m = this.match(method, url.pathname)
       if (m === null) throw new HttpError(404, 'Not found')
       if (m === 'method') throw new HttpError(405, 'Method not allowed')
-      if (m.route.auth) this.opts.authenticate(req)
+      if (m.route.auth) this.opts.authenticate(req, m.route.cookie)
       const body = m.route.json && method !== 'GET' && method !== 'HEAD' ? await readJson(req) : undefined
       const result = await m.route.handler({ req, res, url, params: m.params, ip: clientIp(req), body })
       if (!res.headersSent) {
