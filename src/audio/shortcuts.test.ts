@@ -47,6 +47,9 @@ describe('shortcutAction', () => {
     const btn = document.createElement('button')
     btn.setAttribute('data-keeps-space', '')
     expect(shortcutAction(' ', 'idle', btn)).toBeNull()
+    expect(shortcutAction(' ', 'error', btn)).toBeNull()
+    expect(shortcutAction(' ', 'recording', btn)).toBe('stop')
+    expect(shortcutAction('Escape', 'countingIn', btn)).toBe('cancel')
   })
   it('ignores other keys', () => {
     expect(shortcutAction('a', 'idle', body)).toBeNull()

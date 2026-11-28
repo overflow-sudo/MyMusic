@@ -100,6 +100,27 @@ describe('preview toggle', () => {
     expect(fireEvent.keyDown(toggle, { key: ' ' })).toBe(true) // left to the button
     await act(async () => {})
     expect(startTakeMock).not.toHaveBeenCalled()
+    fireEvent.click(toggle) // what the browser does on Space keyup
+    expect(screen.getByRole('button', { name: 'Önizlemeyi göster' })).toBeInTheDocument()
+  })
+
+  it('with focus on the toggle, Space stops a running take and Escape cancels the count-in', async () => {
+    const stop = vi.fn()
+    const cancel = vi.fn()
+    startTakeMock.mockImplementation(() => ({ stop, cancel, done: new Promise<string | null>(() => {}) }))
+    renderRec()
+    await toVideo()
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }))
+    await waitFor(() => expect(startTakeMock).toHaveBeenCalledTimes(1))
+    const toggle = screen.getByRole('button', { name: 'Önizlemeyi gizle' })
+    const opts = startTakeMock.mock.calls[0][0] as TakeOptions
+    act(() => opts.onState('countingIn'))
+    fireEvent.keyDown(toggle, { key: 'Escape' })
+    expect(cancel).toHaveBeenCalledTimes(1)
+    act(() => opts.onState('recording'))
+    expect(fireEvent.keyDown(toggle, { key: ' ' })).toBe(false) // default prevented: no native click
+    expect(stop).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Önizlemeyi gizle' })).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('chords panel takes the stage when the preview is hidden', async () => {

@@ -5,7 +5,7 @@ import { errName, inputLabel, mediaErrorMessage, noDevices, openStream, stopStre
 import { decodeTrack, startTake, type Take, type TakeOptions } from '../audio/engine'
 import type { SessionState } from '../audio/sessionMachine'
 import { pauseAll, setRecording } from './mediaCoordinator'
-import { isTypingTarget, shortcutAction } from '../audio/shortcuts'
+import { isTypingTarget, keepsSpace, shortcutAction } from '../audio/shortcuts'
 import { formatTimecode } from '../domain/time'
 import type { RecordingKind, Song } from '../domain/types'
 import { lightBus } from '../light/lightBus'
@@ -203,7 +203,7 @@ export default function Recorder({ song, root, latencyMs, onSaved, shortcutsEnab
       if (!enabledRef.current && !running) return
       const target = e.target instanceof HTMLElement ? e.target : document.body
       // Players and fields keep their own Space; other dialogs (settings) block starting, the countdown overlay is ours.
-      if (isTypingTarget(target)) return
+      if (isTypingTarget(target) || keepsSpace(e.key, sessionRef.current, target)) return
       const inDialog = !!target.closest('[role="dialog"]:not(.countdown)')
       if ((!enabledRef.current || inDialog) && !running) return
       // Space is the record key: never let it also "click" a focused button or scroll.
