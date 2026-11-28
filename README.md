@@ -108,6 +108,10 @@ npm run build   # üretim derlemesi (dist/)
 
 `main` dalına her push, GitHub Actions ile Pages'e yayınlanır (`.github/workflows/pages.yml`).
 
+## Bulut (kendi sunucun)
+
+İstersen şarkı listeni, parçaları ve kayıtları kendi sunucuna eşitleyebilir, kayıtları link ile paylaşabilirsin. Sunucu Docker ile kurulur; adım adım rehber: [server/KURULUM.md](server/KURULUM.md).
+
 ## Deneme listesi
 
 Bu adımlar kendi donanımınla elle denenmelidir:

@@ -1,0 +1,10 @@
+# Docker build context = repo root (server/ imports ../shared). Only ship what the server build needs.
+*
+!server/
+!shared/
+server/node_modules
+server/dist
+server/data
+server/.env
+server/test
+**/*.tsbuildinfo

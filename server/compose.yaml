@@ -1,0 +1,17 @@
+services:
+  mymusic:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    image: mymusic-server:latest
+    ports:
+      - "127.0.0.1:8120:8120"
+    volumes:
+      - ./data:/data
+    env_file: .env
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
