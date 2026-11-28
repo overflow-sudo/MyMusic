@@ -25,9 +25,9 @@ describe('config', () => {
 })
 
 describe('db', () => {
-  it('migrates to user_version 1 with WAL and all tables', () => {
+  it('migrates (user_version >= 1, append-only) with WAL and all tables', () => {
     const db = openDb(mkdtempSync(join(tmpdir(), 'mm-db-')))
-    expect(db.pragma('user_version', { simple: true })).toBe(1)
+    expect(db.pragma('user_version', { simple: true })).toBeGreaterThanOrEqual(1)
     expect(db.pragma('journal_mode', { simple: true })).toBe('wal')
     const names = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]).map((r) => r.name)
     for (const t of ['tokens', 'songs', 'files', 'recordings', 'recording_tombstones', 'uploads', 'login_attempts']) expect(names).toContain(t)

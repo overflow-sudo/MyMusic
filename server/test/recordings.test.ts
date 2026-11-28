@@ -325,6 +325,17 @@ describe('hardening', () => {
     expect(d2).toMatch(/^inline; filename="[A-Za-z0-9._-]+\.mp4"; filename\*=UTF-8''[A-Za-z0-9%._-]+$/)
   })
 
+  it('emoji name beyond 80 code units serves 200; lone surrogate fileName -> 400', async () => {
+    const { api } = await boot()
+    const fileName = 'x'.repeat(79) + '😀😀😀.webm'
+    expect((await rec(api, { fileName })).status).toBe(200)
+    await h.app.transcoder.idle()
+    const g = await fetch(local(await urlOf(api, rid('song-0001', fileName))))
+    expect(g.status).toBe(200)
+    expect(g.headers.get('content-disposition')).toMatch(/filename\*=UTF-8''x{79}%F0%9F%98%80/)
+    expect((await rec(api, { fileName: 'bad\uD800.webm' })).status).toBe(400)
+  })
+
   it('delete cancels the running ffmpeg', async () => {
     let aborted = false
     const media: MediaRunner = {

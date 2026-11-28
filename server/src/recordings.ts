@@ -40,8 +40,10 @@ function safeName(fileName: string, ext: string): string {
 
 /** RFC 5987 value of the real (unicode) name; control chars, quotes and separators are dropped first. */
 function utf8Name(fileName: string, ext: string): string {
-  const stem = fileName.replace(/\.[^.]*$/, '').replace(/[\x00-\x1f\x7f"\\/]+/g, '_').slice(0, 80) || 'recording'
-  return encodeURIComponent(`${stem}.${ext}`).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+  try {
+    const stem = Array.from(fileName.replace(/\.[^.]*$/, '').replace(/[\x00-\x1f\x7f"\\/]+/g, '_')).slice(0, 80).join('') || 'recording'
+    return encodeURIComponent(`${stem}.${ext}`).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+  } catch { return safeName(fileName, ext) } // never let header building break serving
 }
 
 export class Recordings {
@@ -67,7 +69,7 @@ export class Recordings {
   async complete(body: Record<string, unknown>, parts: string[]): Promise<unknown> {
     const songId = validId(body.songId, 'song id')
     const { fileName, mime, kind, recordedAt } = body
-    if (typeof fileName !== 'string' || fileName === '' || fileName.length > 255) throw new HttpError(400, 'Invalid fileName')
+    if (typeof fileName !== 'string' || fileName === '' || fileName.length > 255 || !fileName.isWellFormed()) throw new HttpError(400, 'Invalid fileName')
     if (kind !== 'video' && kind !== 'ses') throw new HttpError(400, 'Invalid kind')
     if (typeof recordedAt !== 'string' || !ISO_RE.test(recordedAt) || !Number.isFinite(Date.parse(recordedAt))) throw new HttpError(400, 'recordedAt must be an ISO date string')
     const id = recId(body.id)

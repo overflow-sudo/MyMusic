@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 export type Db = Database.Database
 
+// Append-only from here on: never edit an existing entry, add a new one at the end.
 const MIGRATIONS: string[] = [
   `CREATE TABLE tokens (hash TEXT PRIMARY KEY, created_at TEXT NOT NULL);
    CREATE TABLE songs (id TEXT PRIMARY KEY, json TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT);
