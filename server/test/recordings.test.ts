@@ -74,8 +74,8 @@ describe('recordings', () => {
       size: 13, durationSec: 12.5, status: 'ready', songTitle: 'Title', songArtist: 'Artist', shared: false,
     }])
     const args = (media as ReturnType<typeof fakeRunner>).calls[0]
-    expect(args.slice(0, 2)).toEqual(['-y', '-i'])
-    expect(args.slice(3, -1)).toEqual(['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart'])
+    expect(args.slice(0, 9)).toEqual(['-y', '-protocol_whitelist', 'file', '-format_whitelist', 'matroska,webm,ogg', '-f', 'matroska', '-i', args[8]])
+    expect(args.slice(9, -1)).toEqual(['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart'])
     expect(args[args.length - 1].endsWith('.mp4')).toBe(true)
     expect(existsSync(join(h.config.dataDir, 'files', 'rec', ID, 'out.mp4'))).toBe(true)
   })
@@ -86,7 +86,8 @@ describe('recordings', () => {
     expect((await rec(api, { fileName, kind: 'ses', mime: 'audio/webm' })).status).toBe(200)
     await h.app.transcoder.idle()
     const args = (media as ReturnType<typeof fakeRunner>).calls[0]
-    expect(args.slice(3, -1)).toEqual(['-c:a', 'aac', '-b:a', '192k'])
+    expect(args.slice(0, 8)).toEqual(['-y', '-protocol_whitelist', 'file', '-format_whitelist', 'matroska,webm,ogg', '-f', 'matroska', '-i'])
+    expect(args.slice(9, -1)).toEqual(['-c:a', 'aac', '-b:a', '192k'])
     expect(args[args.length - 1].endsWith('.m4a')).toBe(true)
     const u = await urlOf(api, rid('song-0001', fileName))
     expect((await fetch(local(u))).headers.get('content-type')).toBe('audio/mp4')
@@ -102,7 +103,9 @@ describe('recordings', () => {
     expect(await list(api)).toHaveLength(1)
     expect((await rec(api, { fileName: 'x.webm', id: ID })).status).toBe(400) // id mismatch
     expect((await rec(api, { fileName: 'y.webm', mime: 'video/mp4' })).status).toBe(415)
-    expect((await rec(api, { fileName: 'z.webm', mime: 'audio/ogg; codecs=opus' })).status).toBe(200)
+    expect((await rec(api, { fileName: 'z.webm', kind: 'ses', mime: 'audio/ogg; codecs=opus' })).status).toBe(200)
+    expect((await rec(api, { fileName: 'm1.webm', kind: 'video', mime: 'audio/webm' })).status).toBe(400) // kind/mime mismatch
+    expect((await rec(api, { fileName: 'm2.webm', kind: 'ses', mime: 'video/webm' })).status).toBe(400)
     expect((await rec(api, { fileName: 'k.webm', kind: 'x' })).status).toBe(400)
     expect((await rec(api, { fileName: 'k.webm', recordedAt: 'yesterday' })).status).toBe(400)
     expect((await rec(api, { songId: 'nosuchsong', fileName: 'q.webm' })).status).toBe(409)
@@ -166,7 +169,7 @@ describe('signed urls', () => {
     const g = await fetch(local(url))
     expect(g.status).toBe(200)
     expect(g.headers.get('content-type')).toBe('video/mp4')
-    expect(g.headers.get('content-disposition')).toBe('inline; filename="take_1.mp4"')
+    expect(g.headers.get('content-disposition')).toBe(`inline; filename="take_1.mp4"; filename*=UTF-8''take%201.mp4`)
     expect(g.headers.get('x-content-type-options')).toBe('nosniff')
     expect(g.headers.get('content-security-policy')).toBe('sandbox')
     expect(await g.text()).toBe('CONVERTED-OUTPUT')
@@ -195,7 +198,7 @@ describe('signed urls', () => {
     const dUrl = local(await urlOf(api, ID, '?download=1'))
     const d = await fetch(dUrl)
     expect(d.status).toBe(200)
-    expect(d.headers.get('content-disposition')).toBe('attachment; filename="take_1.mp4"')
+    expect(d.headers.get('content-disposition')).toBe(`attachment; filename="take_1.mp4"; filename*=UTF-8''take%201.mp4`)
     const dInline = new URL(dUrl); dInline.searchParams.delete('download')
     expect((await fetch(dInline)).status).toBe(403)
     // signature of another recording
@@ -245,7 +248,7 @@ describe('transcode queue', () => {
     expect(item).toMatchObject({ status: 'failed', durationSec: null })
     const g = await fetch(local(await urlOf(api, ID)))
     expect(g.headers.get('content-type')).toBe('video/webm')
-    expect(g.headers.get('content-disposition')).toBe('inline; filename="take_1.webm"')
+    expect(g.headers.get('content-disposition')).toBe(`inline; filename="take_1.webm"; filename*=UTF-8''take%201.webm`)
     expect(await g.text()).toBe('WEBM-ORIGINAL')
     expect(readdirNoTmp(join(h.config.dataDir, 'files', 'rec', ID))).toEqual(['orig.webm'])
   })
@@ -289,5 +292,78 @@ describe.skipIf(!hasFfmpeg)('real ffmpeg', () => {
     expect(g.headers.get('content-type')).toBe('video/mp4')
     const bytes = Buffer.from(await g.arrayBuffer())
     expect(bytes.subarray(4, 8).toString()).toBe('ftyp')
+  }, 60_000)
+})
+
+describe('hardening', () => {
+  it('ogg uploads force the ogg demuxer and keep their mime', async () => {
+    const { api, media } = await boot()
+    await rec(api, { fileName: 'o.ogg', kind: 'ses', mime: 'audio/ogg; codecs=opus' })
+    await h.app.transcoder.idle()
+    const args = (media as ReturnType<typeof fakeRunner>).calls[0]
+    expect(args.slice(5, 7)).toEqual(['-f', 'ogg'])
+  })
+
+  it('failed recording serves the original with the stored mime', async () => {
+    const media = fakeRunner(); media.fail = true
+    const { api } = await boot(media)
+    await rec(api, { fileName: 'o.ogg', kind: 'ses', mime: 'audio/ogg; codecs=opus' })
+    await h.app.transcoder.idle()
+    const g = await fetch(local(await urlOf(api, rid('song-0001', 'o.ogg'))))
+    expect(g.headers.get('content-type')).toBe('audio/ogg')
+  })
+
+  it('Content-Disposition has an ASCII fallback plus filename*; quotes and CRLF cannot inject', async () => {
+    const { api } = await boot()
+    const names = ['Şarkı 1.webm', 'a"b\r\nX-Evil: 1.webm']
+    for (const fileName of names) await rec(api, { fileName })
+    await h.app.transcoder.idle()
+    const d1 = (await fetch(local(await urlOf(api, rid('song-0001', names[0]))))).headers.get('content-disposition')
+    expect(d1).toBe(`inline; filename="ark_1.mp4"; filename*=UTF-8''%C5%9Eark%C4%B1%201.mp4`)
+    const d2 = (await fetch(local(await urlOf(api, rid('song-0001', names[1]))))).headers.get('content-disposition')!
+    expect(d2).not.toMatch(/[\r\n]/)
+    expect(d2).toMatch(/^inline; filename="[A-Za-z0-9._-]+\.mp4"; filename\*=UTF-8''[A-Za-z0-9%._-]+$/)
+  })
+
+  it('delete cancels the running ffmpeg', async () => {
+    let aborted = false
+    const media: MediaRunner = {
+      ffmpeg: (_a, o) => new Promise((_, rej) => o.signal!.addEventListener('abort', () => { aborted = true; rej(new Error('aborted')) })),
+      ffprobe: async () => '1',
+    }
+    const { api } = await boot(media)
+    await rec(api)
+    await vi_waitFor(() => h.app.db.prepare('SELECT 1 FROM recordings').get() !== undefined)
+    await new Promise((r) => setTimeout(r, 50))
+    expect((await api('DELETE', `/api/recordings/${ID}`)).status).toBe(204)
+    await h.app.transcoder.idle()
+    expect(aborted).toBe(true)
+  })
+
+  it('startup sweep removes tmp files and empty dirs, keeps real files', async () => {
+    await boot()
+    const root = join(h.config.dataDir, 'files', 'rec')
+    mkdirSync(join(root, 'empty'), { recursive: true })
+    mkdirSync(join(root, 'keep'), { recursive: true })
+    writeFileSync(join(root, 'keep', 'orig.webm'), 'x')
+    writeFileSync(join(root, 'keep', 'orig.ab.tmp'), 'x')
+    mkdirSync(join(root, 'onlytmp'), { recursive: true })
+    writeFileSync(join(root, 'onlytmp', 'out.ab.tmp.mp4'), 'x')
+    h.app.recordings.sweep()
+    expect(existsSync(join(root, 'empty'))).toBe(false)
+    expect(existsSync(join(root, 'onlytmp'))).toBe(false)
+    expect(existsSync(join(root, 'keep', 'orig.ab.tmp'))).toBe(false)
+    expect(existsSync(join(root, 'keep', 'orig.webm'))).toBe(true)
+  })
+})
+
+describe.skipIf(!hasFfmpeg)('real ffmpeg hardening', () => {
+  it('an m3u8 playlist uploaded as a recording fails and produces no output', async () => {
+    const { api } = await boot(realRunner)
+    const playlist = Buffer.from('#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXTINF:1,\n/etc/passwd\n#EXT-X-ENDLIST\n')
+    expect((await rec(api, {}, playlist)).status).toBe(200)
+    await h.app.transcoder.idle()
+    expect((await list(api))[0]).toMatchObject({ status: 'failed' })
+    expect(readdirNoTmp(join(h.config.dataDir, 'files', 'rec', ID))).toEqual(['orig.webm'])
   }, 60_000)
 })

@@ -14,7 +14,7 @@ const MIGRATIONS: string[] = [
    CREATE TABLE recordings (
      id TEXT PRIMARY KEY, song_id TEXT NOT NULL, kind TEXT NOT NULL, recorded_at TEXT NOT NULL,
      file_name TEXT NOT NULL, size INTEGER NOT NULL, duration_sec REAL,
-     status TEXT NOT NULL DEFAULT 'processing', orig_path TEXT, out_path TEXT,
+     status TEXT NOT NULL DEFAULT 'processing', mime TEXT, orig_path TEXT, out_path TEXT,
      song_title TEXT NOT NULL DEFAULT '', song_artist TEXT NOT NULL DEFAULT '',
      share_token TEXT UNIQUE);
    CREATE TABLE recording_tombstones (id TEXT PRIMARY KEY, deleted_at TEXT NOT NULL);

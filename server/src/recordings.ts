@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
+import { readdirSync, rmdirSync, rmSync } from 'node:fs'
 import { rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { RecordingInfo, RecordingListItem } from '../../shared/api.ts'
@@ -19,7 +20,7 @@ const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/
 
 interface Row {
   id: string; song_id: string; kind: 'video' | 'ses'; recorded_at: string; file_name: string; size: number
-  duration_sec: number | null; status: 'processing' | 'ready' | 'failed'; orig_path: string | null; out_path: string | null
+  mime: string | null; duration_sec: number | null; status: 'processing' | 'ready' | 'failed'; orig_path: string | null; out_path: string | null
   song_title: string; song_artist: string; share_token: string | null
 }
 
@@ -35,6 +36,12 @@ function recId(v: unknown): string {
 function safeName(fileName: string, ext: string): string {
   const stem = fileName.replace(/\.[^.]*$/, '').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[._]+/, '').slice(0, 80) || 'recording'
   return `${stem}.${ext}`
+}
+
+/** RFC 5987 value of the real (unicode) name; control chars, quotes and separators are dropped first. */
+function utf8Name(fileName: string, ext: string): string {
+  const stem = fileName.replace(/\.[^.]*$/, '').replace(/[\x00-\x1f\x7f"\\/]+/g, '_').slice(0, 80) || 'recording'
+  return encodeURIComponent(`${stem}.${ext}`).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
 }
 
 export class Recordings {
@@ -66,6 +73,8 @@ export class Recordings {
     const id = recId(body.id)
     if (id !== recordingId(songId, fileName)) throw new HttpError(400, 'Recording id does not match songId and fileName')
     if (typeof mime !== 'string' || !MIME_RE.test(mime)) throw new HttpError(415, 'Unsupported media type')
+    const baseMime = mime.split(';')[0].trim().toLowerCase()
+    if ((kind === 'video') !== (baseMime === 'video/webm')) throw new HttpError(400, 'kind does not match mime')
     const check = (): 'dup' | undefined => {
       if (this.tombstoned(id)) throw new HttpError(410, 'Recording was deleted')
       if (this.row(id)) return 'dup'
@@ -80,8 +89,8 @@ export class Recordings {
       if (check() === 'dup') { await rm(tmp, { force: true }); return { id, status: this.row(id)!.status } }
     } catch (e) { await rm(tmp, { force: true }); throw e }
     const song = this.lib.get(songId)!
-    this.db.prepare(`INSERT INTO recordings (id, song_id, kind, recorded_at, file_name, size, status, orig_path, song_title, song_artist)
-      VALUES (?,?,?,?,?,?, 'processing', ?,?,?)`).run(id, songId, kind, recordedAt, fileName, size, rel, song.title, song.artist)
+    this.db.prepare(`INSERT INTO recordings (id, song_id, kind, recorded_at, file_name, size, status, orig_path, song_title, song_artist, mime)
+      VALUES (?,?,?,?,?,?, 'processing', ?,?,?,?)`).run(id, songId, kind, recordedAt, fileName, size, rel, song.title, song.artist, baseMime)
     try { await rename(tmp, join(this.root, id, 'orig.webm')) } catch (e) {
       this.db.prepare("DELETE FROM recordings WHERE id = ? AND status = 'processing'").run(id)
       await rm(tmp, { force: true })
@@ -99,7 +108,21 @@ export class Recordings {
       this.db.prepare('DELETE FROM recordings WHERE id = ?').run(id) // share token goes with the row
       this.db.prepare('INSERT OR IGNORE INTO recording_tombstones (id, deleted_at) VALUES (?, ?)').run(id, new Date(this.now()).toISOString())
     })()
+    this.transcoder.cancel(id)
     await rm(join(this.root, id), { recursive: true, force: true })
+  }
+
+  /** Startup: remove stray *.tmp files and empty recording dirs. */
+  sweep(): void {
+    let dirs: string[] = []
+    try { dirs = readdirSync(this.root) } catch { return }
+    for (const d of dirs) {
+      const dir = join(this.root, d)
+      try {
+        for (const f of readdirSync(dir)) if (f.includes('.tmp')) rmSync(join(dir, f), { force: true })
+        if (readdirSync(dir).length === 0) rmdirSync(dir)
+      } catch { /* not a dir / raced */ }
+    }
   }
 
   signedUrl(idRaw: string, download: boolean): { url: string } {
@@ -123,14 +146,14 @@ export class Recordings {
     const rel = ready ? row.out_path! : row.orig_path
     if (!rel) throw new HttpError(404, 'No file')
     const ext = !ready ? 'webm' : row.kind === 'video' ? 'mp4' : 'm4a'
-    const type = !ready ? (row.kind === 'video' ? 'video/webm' : 'audio/webm') : row.kind === 'video' ? 'video/mp4' : 'audio/mp4'
+    const type = !ready ? (row.mime ?? (row.kind === 'video' ? 'video/webm' : 'audio/webm')) : row.kind === 'video' ? 'video/mp4' : 'audio/mp4'
     await serveFile(ctx, join(this.files.filesRoot, rel), {
       'Content-Type': type,
       'Accept-Ranges': 'bytes',
       'Cache-Control': 'private, no-store',
       'X-Content-Type-Options': 'nosniff',
       'Content-Security-Policy': 'sandbox',
-      'Content-Disposition': `${download ? 'attachment' : 'inline'}; filename="${safeName(row.file_name, ext)}"`,
+      'Content-Disposition': `${download ? 'attachment' : 'inline'}; filename="${safeName(row.file_name, ext)}"; filename*=UTF-8''${utf8Name(row.file_name, ext)}`,
     })
   }
 }

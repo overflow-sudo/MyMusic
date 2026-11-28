@@ -38,6 +38,7 @@ export function createApp(config: Config, logger: Logger = consoleLogger, opts: 
   const transcoder = new Transcoder(db, files.filesRoot, opts.media ?? realRunner, logger, opts.transcodeTimeoutMs)
   const recordings = new Recordings(db, files, library, transcoder, config)
   registerRecordingRoutes(router, recordings, uploads)
+  recordings.sweep()
   transcoder.start()
 
   const sweep = () => { uploads.cleanupStaleUploads().catch((e) => logger.error('upload cleanup failed', { message: String(e) })) }
