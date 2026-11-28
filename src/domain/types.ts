@@ -6,6 +6,8 @@ export interface Song {
   id: string; title: string; artist: string; status: SongStatus
   bpm: number; countInBeats: number; track?: Track
   cover?: Cover; chords?: string
+  /** Own light color '#rrggbb'; absent = use the global choice. */
+  lightColor?: string
   folderName: string // fixed at creation, never renamed
   createdAt: string; updatedAt: string // ISO
   [extra: string]: unknown

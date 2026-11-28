@@ -258,7 +258,7 @@ describe('SongDetail layout and settings drawer', () => {
     const dialog = screen.getByRole('dialog', { name: 'Şarkı ayarları' })
     expect(within(dialog).getByRole('button', { name: 'Çalıştığım' })).toHaveFocus()
     const labels = within(dialog).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)
-    expect(labels).toEqual(['Durum', 'Tempo', 'Sayım', 'Parça', 'Akorlar', 'Cihazlar', 'Işık'])
+    expect(labels).toEqual(['Durum', 'Tempo', 'Sayım', 'Parça', 'Akorlar', 'Cihazlar', 'Işık', 'Bu şarkının rengi'])
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(gear).toHaveFocus()
@@ -294,6 +294,19 @@ describe('SongDetail layout and settings drawer', () => {
     expect(within(group).getByRole('button', { name: 'C · Tüm ekran' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(within(group).getByRole('button', { name: 'Kapalı' }))
     expect(getLightMode()).toBe('off')
+    await screen.findByText('Henüz kayıt yok.')
+  })
+
+  it('song color: swatch patches lightColor, Genel clears it', async () => {
+    const { patches } = setup()
+    openDrawer()
+    const group = screen.getByRole('group', { name: 'Işık rengi' })
+    expect(within(group).getByRole('button', { name: 'Genel' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(within(group).getByRole('button', { name: 'Kırmızı' }))
+    await waitFor(() => expect(patches).toContainEqual({ lightColor: '#ef4444' }))
+    expect(within(group).getByRole('button', { name: 'Kırmızı' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(within(group).getByRole('button', { name: 'Genel' }))
+    await waitFor(() => expect(patches).toContainEqual({ lightColor: undefined }))
     await screen.findByText('Henüz kayıt yok.')
   })
 

@@ -1,8 +1,24 @@
 import { useEffect } from 'react'
 import { lightBus } from '../light/lightBus'
+import { hexSaturation, hexToHue, SAT_FLOOR } from '../light/lightMath'
+import { effectiveLightColor, getLightColor, onLightColorChange } from '../light/lightPrefs'
 
-/** Song screen (bpm): free pulse at the song tempo and its hue. List (null): slow breath, default hue. */
-export function useSongLight(bpm: number | null) {
+/**
+ * Song screen (bpm): free pulse at the song tempo and its hue. List (null): slow breath, default hue.
+ * The light color is the song's own choice, else the global one, else auto (tempo hue).
+ */
+export function useSongLight(bpm: number | null, song?: { lightColor?: unknown } | null) {
+  const songColor = song?.lightColor
+  useEffect(() => {
+    const apply = (global = getLightColor()) => {
+      const c = effectiveLightColor(global, { lightColor: songColor })
+      if (c) lightBus.setFixedHue(hexToHue(c), Math.max(SAT_FLOOR, hexSaturation(c)))
+      else lightBus.setFixedHue(null)
+    }
+    apply()
+    return onLightColorChange(apply)
+  }, [songColor])
+
   useEffect(() => {
     lightBus.setHueBpm(bpm)
     if (bpm === null) lightBus.setSource({ kind: 'breath' })

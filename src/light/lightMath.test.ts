@@ -54,3 +54,21 @@ describe('lightMath', () => {
     }
   })
 })
+
+import { hexToHue as _h2h, hexSaturation as _hs, hueFor as _hf } from './lightMath'
+describe('light color math', () => {
+  it('hexToHue', () => {
+    expect(_h2h('#ef4444')).toBeCloseTo(0, 0)
+    expect(_h2h('#3b82f6')).toBeCloseTo(217, 0)
+    expect(_h2h('#22c55e')).toBeCloseTo(142, 0)
+  })
+  it('saturation: grey 0, vivid high', () => {
+    expect(_hs('#808080')).toBe(0)
+    expect(_hs('#3b82f6')).toBeGreaterThan(0.9)
+  })
+  it('hueFor: fixed ignores level; auto adds it', () => {
+    expect(_hf(120, 0, '#22c55e')).toBe(_hf(120, 1, '#22c55e'))
+    expect(_hf(60, 0.5, null)).toBe(245)
+    expect(_hf(null, 0, null)).toBe(205)
+  })
+})

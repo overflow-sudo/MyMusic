@@ -1,6 +1,7 @@
-import { cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { lightBus } from '../light/lightBus'
+import { setLightColor } from '../light/lightPrefs'
 import { useSongLight } from './useSongLight'
 
 beforeEach(() => {
@@ -29,5 +30,25 @@ describe('useSongLight', () => {
     rerender({ bpm: 110 })
     expect(lightBus.getSource()).toBe(take)
     expect(lightBus.getHueBpm()).toBe(110)
+  })
+})
+
+describe('useSongLight color', () => {
+  it('song color beats global; clearing falls back; auto → null', () => {
+    localStorage.clear()
+    const { rerender } = renderHook(({ c }: { c?: string }) => useSongLight(100, { lightColor: c }), { initialProps: { c: undefined as string | undefined } })
+    expect(lightBus.getFixedHue()).toBeNull()
+    act(() => setLightColor('#ef4444'))
+    expect(lightBus.getFixedHue()).toBeCloseTo(0, 0)
+    rerender({ c: '#22c55e' })
+    expect(lightBus.getFixedHue()).toBeCloseTo(142, 0)
+    rerender({ c: undefined })
+    expect(lightBus.getFixedHue()).toBeCloseTo(0, 0)
+    act(() => setLightColor('auto'))
+    expect(lightBus.getFixedHue()).toBeNull()
+  })
+  it('floors saturation at 40%', () => {
+    renderHook(() => useSongLight(100, { lightColor: '#808080' }))
+    expect(lightBus.getFixedSat()).toBe(0.4)
   })
 })

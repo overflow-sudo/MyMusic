@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { resolveOutputDevice } from '../audio/devices'
 import { measureAutoLatencyMs } from '../audio/latency'
+import LightColorPicker from './LightColorPicker'
 import LightModeSegment from './LightModeSegment'
 
 interface Props {
@@ -80,6 +81,8 @@ export default function SettingsDialog({ value, onSave, onClose, measureAuto = d
         <div className="modal-field">
           <h3 className="drawer-label">Işık</h3>
           <LightModeSegment />
+          <h3 className="drawer-label">Işık rengi</h3>
+          <LightColorPicker />
           <p className="muted">Ritme göre nabız atan ışık. Şarkı ekranındaki ⚙ panelinden de değiştirilebilir.</p>
         </div>
         {error && (

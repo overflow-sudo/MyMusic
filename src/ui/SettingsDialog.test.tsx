@@ -40,6 +40,19 @@ describe('SettingsDialog', () => {
     await waitFor(() => expect(onSave).toHaveBeenCalledWith(60))
   })
 
+  it('Işık rengi: Otomatik by default; a swatch stores the color', () => {
+    localStorage.clear()
+    render(<SettingsDialog value={null} onSave={async () => {}} onClose={() => {}} measureAuto={async () => 20} />)
+    const group = screen.getByRole('group', { name: 'Işık rengi' })
+    expect(within(group).getByRole('button', { name: 'Otomatik' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(group).getAllByRole('button')).toHaveLength(9)
+    fireEvent.click(within(group).getByRole('button', { name: 'Yeşil' }))
+    expect(localStorage.getItem('mm.lightColor')).toBe('#22c55e')
+    expect(within(group).getByRole('button', { name: 'Yeşil' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(within(group).getByRole('button', { name: 'Otomatik' }))
+    expect(localStorage.getItem('mm.lightColor')).toBe('auto')
+  })
+
   it('Işık segment: choosing C stores the mode; the current one is pressed', () => {
     setLightMode('off')
     setup(null)

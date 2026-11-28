@@ -9,6 +9,7 @@ import ChordSheet from './ChordSheet'
 import ChordsEditor from './ChordsEditor'
 import CoverPanel from './CoverPanel'
 import Drawer from './Drawer'
+import { ColorChoices } from './LightColorPicker'
 import LightModeSegment from './LightModeSegment'
 import RecordingList from './RecordingList'
 import SongForm, { type SongInput } from './SongForm'
@@ -279,6 +280,12 @@ export default function SongDetail({ song, root, onBack, patchSong, deleteSong, 
           <section className="drawer-section">
             <h3 className="drawer-label">Işık</h3>
             <LightModeSegment />
+            <h3 className="drawer-label">Bu şarkının rengi</h3>
+            <ColorChoices
+              value={song.lightColor ?? null}
+              noneLabel="Genel"
+              onChange={(c) => void save({ lightColor: c ?? undefined })}
+            />
           </section>
           <section className="drawer-section drawer-actions">
             <button ref={editButton} type="button" className="btn btn-ghost" onClick={() => setEditing(true)}>

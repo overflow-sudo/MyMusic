@@ -34,7 +34,7 @@ function Shell({ handle }: { handle: FileSystemDirectoryHandle }) {
   const [recorderBusy, setRecorderBusy] = useState(false)
   const songs = lib.library.songs
   const selected = selectedSongId ? songs.find((s) => s.id === selectedSongId) : undefined
-  useSongLight(selected ? selected.bpm : null)
+  useSongLight(selected ? selected.bpm : null, selected)
   // Backfill runs while the list is on screen; covers for new songs are searched right after adding.
   const covers = useCovers(root, songs, lib.patchSong, { backfill: lib.status === 'ready' && !selected })
   useEffect(() => {

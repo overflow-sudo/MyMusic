@@ -48,3 +48,32 @@ export function freePhase(nowMs: number, bpm: number): number {
 export function breath(nowMs: number): number {
   return (1 - Math.cos((2 * Math.PI * nowMs) / 6000)) / 2
 }
+
+const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+
+/** Hue (0..360) of a #rrggbb color. */
+export function hexToHue(hex: string): number {
+  const [r, g, b] = rgb(hex)
+  const max = Math.max(r, g, b)
+  const d = max - Math.min(r, g, b)
+  if (d === 0) return 0
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+  return (h * 60 + 360) % 360
+}
+
+/** HSL saturation (0..1) of a #rrggbb color. */
+export function hexSaturation(hex: string): number {
+  const [r, g, b] = rgb(hex)
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const l = (max + min) / 2
+  return max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1))
+}
+
+export const SAT_FLOOR = 0.4
+
+/** Hue to paint: a fixed color wins and ignores the guitar level; otherwise tempo hue plus level. */
+export function hueFor(bpm: number | null, level: number, color: string | null): number {
+  if (color) return hexToHue(color)
+  return (bpm === null ? 205 : hueForBpm(bpm)) + level * 30
+}

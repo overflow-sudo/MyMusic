@@ -31,6 +31,7 @@ export function parseLibrary(
     const song: Record<string, unknown> = { ...s, countInBeats: s.countInBeats === undefined ? 4 : s.countInBeats }
     if (song.cover !== undefined && !validCover(song.cover)) delete song.cover
     if (song.chords !== undefined && typeof song.chords !== 'string') delete song.chords
+    if (song.lightColor !== undefined && !(typeof song.lightColor === 'string' && /^#[0-9a-f]{6}$/i.test(song.lightColor))) delete song.lightColor
     const ok =
       typeof song.id === 'string' && typeof song.title === 'string' && typeof song.folderName === 'string' &&
       typeof song.bpm === 'number' && typeof song.countInBeats === 'number'

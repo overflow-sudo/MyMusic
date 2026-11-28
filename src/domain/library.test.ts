@@ -116,3 +116,16 @@ describe('cover and chords fields', () => {
       expect('cover' in parse({ cover })).toBe(false)
   })
 })
+
+describe('lightColor', () => {
+  const parse = (lc: unknown) => {
+    const song = { ...createSong(input, now, 's1'), lightColor: lc }
+    const r = parseLibrary(JSON.stringify({ version: 1, songs: [song] }))
+    if (!r.ok) throw new Error('x')
+    return r.library.songs[0]
+  }
+  it('keeps a valid hex', () => expect(parse('#3B82f6').lightColor).toBe('#3B82f6'))
+  it('drops bad values', () => {
+    for (const bad of ['red', '#fff', 42, null]) expect('lightColor' in parse(bad)).toBe(false)
+  })
+})
